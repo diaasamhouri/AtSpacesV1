@@ -7,32 +7,333 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  role      String   // ADMIN, VENDOR, CUSTOMER
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  vendorProfile VendorProfile?
+// ==================== ENUMS ====================
+
+enum Role {
+  ADMIN
+  VENDOR
+  CUSTOMER
 }
 
+enum VendorStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum BranchStatus {
+  ACTIVE
+  SUSPENDED
+  UNDER_REVIEW
+}
+
+enum City {
+  AMMAN
+  IRBID
+  AQABA
+}
+
+enum ServiceType {
+  HOT_DESK
+  PRIVATE_OFFICE
+  MEETING_ROOM
+}
+
+enum PricingInterval {
+  HOURLY
+  HALF_DAY
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+enum PaymentMethod {
+  APPLE_PAY
+  VISA
+  MASTERCARD
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum ApprovalRequestType {
+  VENDOR_REGISTRATION
+  CAPACITY_CHANGE
+  BRANCH_SUSPENSION
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_REMINDER
+  VENDOR_APPROVED
+  VENDOR_REJECTED
+  APPROVAL_REQUEST
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  GENERAL
+}
+
+// ==================== AUTH MODELS ====================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  emailVerified DateTime?
+  phone         String?   @unique
+  passwordHash  String?
+  name          String?
+  image         String?
+  role          Role      @default(CUSTOMER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  vendorProfile VendorProfile?
+  bookings      Booking[]
+  notifications Notification[]
+  otpCodes      OtpCode[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  provider          String  // google, credentials
+  providerAccountId String
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         Int?
+  tokenType         String?
+  scope             String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  userId    String?
+  phone     String
+  code      String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([phone, code])
+}
+
+// ==================== VENDOR & BRANCH ====================
+
 model VendorProfile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
+  id          String       @id @default(uuid())
+  userId      String       @unique
   companyName String
-  status      String   @default("PENDING_APPROVAL") // DRAFT, PENDING_APPROVAL, APPROVED, REJECTED
-  
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  branches    Branch[]
+  description String?
+  logo        String?
+  status      VendorStatus @default(PENDING_APPROVAL)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branches Branch[]
+
+  @@index([status])
 }
 
 model Branch {
-  id              String   @id @default(uuid())
+  id              String       @id @default(uuid())
   vendorProfileId String
   name            String
-  city            String   // Amman, Irbid, Aqaba
+  city            City
   address         String
-  
-  vendor          VendorProfile @relation(fields: [vendorProfileId], references: [id], onDelete: Cascade)
+  description     String?
+  phone           String?
+  email           String?
+  latitude        Float?
+  longitude       Float?
+  images          String[]     // Array of image URLs
+  status          BranchStatus @default(ACTIVE)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  vendor           VendorProfile    @relation(fields: [vendorProfileId], references: [id], onDelete: Cascade)
+  services         Service[]
+  bookings         Booking[]
+  approvalRequests ApprovalRequest[]
+
+  @@index([vendorProfileId])
+  @@index([city])
+  @@index([status])
+}
+
+// ==================== SERVICES & PRICING ====================
+
+model Service {
+  id          String      @id @default(uuid())
+  branchId    String
+  type        ServiceType
+  name        String      // e.g. "Hot Desk Area A", "Office Room 3"
+  description String?
+  capacity    Int         // Total seats/rooms available
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  branch   Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  pricing  ServicePricing[]
+  bookings Booking[]
+
+  @@index([branchId])
+  @@index([type])
+  @@index([branchId, type])
+}
+
+model ServicePricing {
+  id        String          @id @default(uuid())
+  serviceId String
+  interval  PricingInterval
+  price     Decimal         @db.Decimal(10, 3) // JOD supports 3 decimal places (fils)
+  currency  String          @default("JOD")
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, interval])
+  @@index([serviceId])
+}
+
+// ==================== BOOKINGS & PAYMENTS ====================
+
+model Booking {
+  id            String        @id @default(uuid())
+  userId        String
+  branchId      String
+  serviceId     String
+  status        BookingStatus @default(PENDING)
+  startTime     DateTime
+  endTime       DateTime
+  numberOfPeople Int          @default(1)
+  totalPrice    Decimal       @db.Decimal(10, 3)
+  currency      String        @default("JOD")
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch  Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  payment Payment?
+
+  @@index([userId])
+  @@index([branchId])
+  @@index([serviceId])
+  @@index([status])
+  @@index([startTime, endTime])
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  bookingId     String        @unique
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  amount        Decimal       @db.Decimal(10, 3)
+  currency      String        @default("JOD")
+  transactionId String?       // External gateway transaction ID
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([transactionId])
+}
+
+// ==================== APPROVAL SYSTEM ====================
+
+model ApprovalRequest {
+  id          String                @id @default(uuid())
+  branchId    String
+  type        ApprovalRequestType
+  status      ApprovalRequestStatus @default(PENDING)
+  description String                // What change is requested
+  details     Json?                 // Structured data about the change
+  reason      String?               // Rejection reason (filled by admin)
+  reviewedBy  String?               // Admin user ID who reviewed
+  reviewedAt  DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
+  @@index([status])
+  @@index([type])
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  data      Json?            // Additional data (booking ID, etc.)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
 }

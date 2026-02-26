@@ -1,5 +1,5 @@
 {
-  "name": "tmp_turbo",
+  "name": "atspaces",
   "private": true,
   "scripts": {
     "build": "turbo run build",
