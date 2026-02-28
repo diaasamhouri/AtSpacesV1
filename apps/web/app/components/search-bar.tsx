@@ -1,15 +1,17 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useCallback, useState, useEffect, useRef } from 'react';
 
 interface SearchBarProps {
   defaultValue?: string;
+  placeholder?: string;
 }
 
-export function SearchBar({ defaultValue = '' }: SearchBarProps) {
+export function SearchBar({ defaultValue = '', placeholder = 'Search by name, location, or vendor...' }: SearchBarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [value, setValue] = useState(defaultValue);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -22,7 +24,7 @@ export function SearchBar({ defaultValue = '' }: SearchBarProps) {
         params.delete('search');
       }
       params.delete('page');
-      router.push(`/spaces?${params.toString()}`);
+      router.push(`${pathname}?${params.toString()}`);
     },
     [router, searchParams],
   );
@@ -46,7 +48,7 @@ export function SearchBar({ defaultValue = '' }: SearchBarProps) {
   return (
     <div className="relative">
       <svg
-        className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+        className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
         fill="none"
         viewBox="0 0 24 24"
         strokeWidth="1.5"
@@ -62,8 +64,8 @@ export function SearchBar({ defaultValue = '' }: SearchBarProps) {
         type="text"
         value={value}
         onChange={handleChange}
-        placeholder="Search by name, location, or vendor..."
-        className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-4 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-600 dark:bg-dark-800 dark:text-white dark:placeholder-gray-500"
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-slate-700 bg-dark-900 py-3 pl-10 pr-4 text-sm text-white shadow-inner placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
       />
     </div>
   );

@@ -3,17 +3,19 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateBookingDto } from './dto';
+import { buildPaginatedResponse } from '../common/helpers/paginate';
 
 @Injectable()
 export class BookingsService {
   constructor(
     private prisma: PrismaService,
     private redis: RedisService,
-  ) {}
+  ) { }
 
   async createBooking(userId: string, dto: CreateBookingDto) {
     const startTime = new Date(dto.startTime);
@@ -28,7 +30,7 @@ export class BookingsService {
       where: { id: dto.serviceId },
       include: {
         pricing: { where: { isActive: true } },
-        branch: { select: { id: true, status: true } },
+        branch: { select: { id: true, status: true, vendorProfileId: true, autoAcceptBookings: true } },
       },
     });
 
@@ -84,12 +86,41 @@ export class BookingsService {
       }
 
       // Calculate total price
-      const totalPrice = pricing.price.toNumber();
+      let totalPrice = pricing.price.toNumber();
+
+      let promoCodeRecord: any = null;
+      if (dto.promoCode) {
+        promoCodeRecord = await this.prisma.promoCode.findFirst({
+          where: {
+            code: dto.promoCode.toUpperCase(),
+            isActive: true,
+            OR: [
+              { branchId: service.branch.id },
+              { branchId: null, vendorProfileId: service.branch.vendorProfileId }
+            ]
+          }
+        });
+
+        if (!promoCodeRecord) {
+          throw new BadRequestException('Invalid or inactive promo code');
+        }
+
+        if (promoCodeRecord.validUntil && new Date() > promoCodeRecord.validUntil) {
+          throw new BadRequestException('Promo code has expired');
+        }
+
+        if (promoCodeRecord.maxUses > 0 && promoCodeRecord.currentUses >= promoCodeRecord.maxUses) {
+          throw new BadRequestException('Promo code usage limit reached');
+        }
+
+        const discountAmount = (totalPrice * promoCodeRecord.discountPercent) / 100;
+        totalPrice = Math.max(0, totalPrice - discountAmount);
+      }
 
       // Determine payment status based on method
       const isCash = dto.paymentMethod === 'CASH';
       const paymentStatus = isCash ? 'PENDING' : 'COMPLETED';
-      const bookingStatus = isCash ? 'PENDING' : 'CONFIRMED';
+      const bookingStatus = service.branch.autoAcceptBookings ? 'CONFIRMED' : 'PENDING_APPROVAL';
 
       // Create booking + payment in a transaction
       const booking = await this.prisma.booking.create({
@@ -113,16 +144,70 @@ export class BookingsService {
           },
         },
         include: {
-          branch: { select: { id: true, name: true, city: true, address: true } },
+          branch: {
+            select: { id: true, name: true, city: true, address: true },
+          },
           service: { select: { id: true, type: true, name: true } },
           payment: true,
         },
       });
 
+      // Increment promo code usage if applicable
+      if (promoCodeRecord) {
+        await this.prisma.promoCode.update({
+          where: { id: promoCodeRecord.id },
+          data: { currentUses: { increment: 1 } }
+        });
+      }
+
       return this.serializeBooking(booking);
     } finally {
       await this.redis.releaseLock(lockKey);
     }
+  }
+
+  async verifyPromoCode(code: string, serviceId: string) {
+    const promoCode = code.toUpperCase();
+
+    // Verify service exists to get branch and vendor details
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      include: { branch: true },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    // Find the promo code
+    const promoCodeRecord = await this.prisma.promoCode.findFirst({
+      where: {
+        code: promoCode,
+        isActive: true,
+        OR: [
+          { branchId: service.branch.id }, // Specific to this branch
+          { branchId: null, vendorProfileId: service.branch.vendorProfileId } // Global to vendor
+        ]
+      }
+    });
+
+    if (!promoCodeRecord) {
+      throw new BadRequestException('Invalid or inactive promo code');
+    }
+
+    if (promoCodeRecord.validUntil && new Date() > promoCodeRecord.validUntil) {
+      throw new BadRequestException('Promo code has expired');
+    }
+
+    if (promoCodeRecord.maxUses > 0 && promoCodeRecord.currentUses >= promoCodeRecord.maxUses) {
+      throw new BadRequestException('Promo code usage limit reached');
+    }
+
+    return {
+      valid: true,
+      code: promoCodeRecord.code,
+      discountPercent: promoCodeRecord.discountPercent,
+    };
   }
 
   async getUserBookings(userId: string) {
@@ -137,6 +222,87 @@ export class BookingsService {
     });
 
     return { data: bookings.map((b) => this.serializeBooking(b)) };
+  }
+
+  async getVendorBookings(userId: string, query: { page?: number; limit?: number; search?: string } = {}) {
+    const vendorProfile = await this.prisma.vendorProfile.findUnique({
+      where: { userId },
+    });
+    if (!vendorProfile || vendorProfile.status !== 'APPROVED') {
+      throw new ForbiddenException('Only approved vendors can view these bookings');
+    }
+
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = { branch: { vendorProfileId: vendorProfile.id } };
+    if (query.search) {
+      where.user = { name: { contains: query.search, mode: 'insensitive' } };
+    }
+
+    const [bookings, total] = await Promise.all([
+      this.prisma.booking.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          branch: { select: { id: true, name: true, city: true, address: true } },
+          service: { select: { id: true, type: true, name: true } },
+          payment: true,
+          user: { select: { name: true, email: true, phone: true } },
+        },
+      }),
+      this.prisma.booking.count({ where }),
+    ]);
+
+    return buildPaginatedResponse(
+      bookings.map((b) => ({ ...this.serializeBooking(b), customer: b.user })),
+      total, page, limit,
+    );
+  }
+
+  async updateBookingStatus(userId: string, bookingId: string, status: any) {
+    const vendorProfile = await this.prisma.vendorProfile.findUnique({
+      where: { userId },
+    });
+    if (!vendorProfile || vendorProfile.status !== 'APPROVED') {
+      throw new ForbiddenException('Only approved vendors can update bookings');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { branch: true },
+    });
+
+    if (!booking || booking.branch.vendorProfileId !== vendorProfile.id) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (status === 'REJECTED') {
+      const payment = await this.prisma.payment.findUnique({
+        where: { bookingId },
+      });
+      if (payment && payment.status === 'COMPLETED') {
+        await this.prisma.payment.update({
+          where: { id: payment.id },
+          data: { status: 'REFUNDED' },
+        });
+      }
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status },
+      include: {
+        branch: { select: { id: true, name: true, city: true, address: true } },
+        service: { select: { id: true, type: true, name: true } },
+        payment: true,
+      }
+    });
+
+    return this.serializeBooking(updated);
   }
 
   async getBookingById(bookingId: string, userId: string) {
@@ -239,13 +405,13 @@ export class BookingsService {
       service: booking.service,
       payment: booking.payment
         ? {
-            id: booking.payment.id,
-            method: booking.payment.method,
-            status: booking.payment.status,
-            amount: booking.payment.amount.toNumber(),
-            currency: booking.payment.currency,
-            paidAt: booking.payment.paidAt?.toISOString() ?? null,
-          }
+          id: booking.payment.id,
+          method: booking.payment.method,
+          status: booking.payment.status,
+          amount: booking.payment.amount.toNumber(),
+          currency: booking.payment.currency,
+          paidAt: booking.payment.paidAt?.toISOString() ?? null,
+        }
         : null,
     };
   }

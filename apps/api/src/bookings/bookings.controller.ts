@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -9,7 +10,12 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BookingsService } from './bookings.service';
 import {
@@ -22,7 +28,7 @@ import {
 @ApiTags('Bookings')
 @Controller('bookings')
 export class BookingsController {
-  constructor(private bookingsService: BookingsService) {}
+  constructor(private bookingsService: BookingsService) { }
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -50,7 +56,50 @@ export class BookingsController {
     @Query('startTime') startTime: string,
     @Query('endTime') endTime: string,
   ) {
-    return this.bookingsService.checkAvailability(serviceId, startTime, endTime);
+    return this.bookingsService.checkAvailability(
+      serviceId,
+      startTime,
+      endTime,
+    );
+  }
+
+  @Get('verify-promo')
+  @ApiOperation({ summary: 'Verify a promo code' })
+  @ApiResponse({ status: 200, description: 'Promo code is valid' })
+  async verifyPromoCode(
+    @Query('code') code: string,
+    @Query('serviceId') serviceId: string,
+  ) {
+    if (!code || !serviceId) {
+      throw new BadRequestException('Missing required query parameters');
+    }
+    return this.bookingsService.verifyPromoCode(code, serviceId);
+  }
+
+  // ==================== VENDOR ENDPOINTS ====================
+
+  @Get('vendor')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all bookings for vendor branches' })
+  async getVendorBookings(@Req() req: any, @Query('page') page?: string, @Query('limit') limit?: string, @Query('search') search?: string) {
+    return this.bookingsService.getVendorBookings(req.user.id, {
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search,
+    });
+  }
+
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update booking status (Vendor only)' })
+  async updateBookingStatus(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('status') status: any,
+  ) {
+    return this.bookingsService.updateBookingStatus(req.user.id, id, status);
   }
 
   @Get(':id')
