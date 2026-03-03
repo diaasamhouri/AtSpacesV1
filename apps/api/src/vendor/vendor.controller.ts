@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Post, Body, Param, Req, UseGuards, Delete, Quer
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VendorService } from './vendor.service';
+import { UpdateVendorProfileDto, VendorReplyDto, CreatePromoCodeDto, UpdatePromoCodeDto } from './dto';
 
 @ApiTags('Vendor')
 @Controller('vendor')
@@ -24,8 +25,8 @@ export class VendorController {
 
     @Patch('profile')
     @ApiOperation({ summary: 'Update vendor profile' })
-    async updateProfile(@Req() req: any, @Body() body: any) {
-        return this.vendorService.updateProfile(req.user.id, body);
+    async updateProfile(@Req() req: any, @Body() dto: UpdateVendorProfileDto) {
+        return this.vendorService.updateProfile(req.user.id, dto);
     }
 
     @Get('earnings')
@@ -42,8 +43,11 @@ export class VendorController {
 
     @Get('notifications')
     @ApiOperation({ summary: 'Get vendor notifications' })
-    async getNotifications(@Req() req: any) {
-        return this.vendorService.getNotifications(req.user.id);
+    async getNotifications(@Req() req: any, @Query('page') page?: string, @Query('limit') limit?: string) {
+        return this.vendorService.getNotifications(req.user.id, {
+            page: page ? parseInt(page, 10) : undefined,
+            limit: limit ? parseInt(limit, 10) : undefined,
+        });
     }
 
     @Patch('notifications/:id/read')
@@ -58,10 +62,18 @@ export class VendorController {
         return this.vendorService.requestVerification(req.user.id);
     }
 
+    // ==================== REVIEWS ====================
+
+    @Get('reviews')
+    @ApiOperation({ summary: 'Get all reviews for vendor branches' })
+    async getReviews(@Req() req: any) {
+        return this.vendorService.getVendorReviews(req.user.id);
+    }
+
     @Patch('reviews/:id/reply')
     @ApiOperation({ summary: 'Reply to a customer review' })
-    async replyToReview(@Req() req: any, @Param('id') reviewId: string, @Body() body: { vendorReply: string }) {
-        return this.vendorService.replyToReview(req.user.id, reviewId, body.vendorReply);
+    async replyToReview(@Req() req: any, @Param('id') reviewId: string, @Body() dto: VendorReplyDto) {
+        return this.vendorService.replyToReview(req.user.id, reviewId, dto.vendorReply);
     }
 
     // ==================== CALENDAR ====================
@@ -85,13 +97,13 @@ export class VendorController {
 
     @Post('promotions')
     @ApiOperation({ summary: 'Create a new promo code' })
-    async createPromoCode(@Req() req: any, @Body() dto: any) {
+    async createPromoCode(@Req() req: any, @Body() dto: CreatePromoCodeDto) {
         return this.vendorService.createPromoCode(req.user.id, dto);
     }
 
     @Patch('promotions/:id')
     @ApiOperation({ summary: 'Update a promo code' })
-    async updatePromoCode(@Req() req: any, @Param('id') promoId: string, @Body() dto: any) {
+    async updatePromoCode(@Req() req: any, @Param('id') promoId: string, @Body() dto: UpdatePromoCodeDto) {
         return this.vendorService.updatePromoCode(req.user.id, promoId, dto);
     }
 

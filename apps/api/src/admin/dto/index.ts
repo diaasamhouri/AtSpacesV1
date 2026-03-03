@@ -23,3 +23,6 @@ export {
     AdminBranchesQueryDto,
     AdminApprovalsQueryDto,
 } from './admin-query.dto';
+export { VerifyVendorDto } from './verify-vendor.dto';
+export { SendNotificationDto } from './send-notification.dto';
+export { UpdateSystemSettingsDto } from './update-system-settings.dto';

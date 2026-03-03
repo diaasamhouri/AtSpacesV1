@@ -73,26 +73,26 @@ export function ConfirmDialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-md overflow-hidden rounded-2xl bg-dark-900 shadow-2xl ring-1 ring-slate-800 border border-slate-700/50"
+            className="relative w-full max-w-md overflow-hidden rounded-2xl bg-dark-900 shadow-2xl ring-1 ring-slate-800 border border-slate-200 dark:border-slate-700/50"
             role="dialog"
             aria-modal="true"
           >
             <div className="p-6">
-              <h3 className="text-lg font-bold text-white">{title}</h3>
-              <p className="mt-2 text-sm text-slate-400">{message}</p>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{message}</p>
 
               <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={onClose}
                   disabled={loading}
-                  className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-bold text-white bg-dark-850 hover:bg-dark-800 hover:border-slate-600 transition-colors disabled:opacity-50"
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 px-5 py-2.5 text-sm font-bold text-gray-900 dark:text-white bg-dark-850 hover:bg-gray-100 dark:hover:bg-dark-800 hover:border-slate-600 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={onConfirm}
                   disabled={loading}
-                  className={`rounded-xl px-5 py-2.5 text-sm font-bold text-white transition-colors disabled:opacity-50 ${styles.button}`}
+                  className={`rounded-xl px-5 py-2.5 text-sm font-bold text-gray-900 dark:text-white transition-colors disabled:opacity-50 ${styles.button}`}
                 >
                   {loading ? (
                     <span className="flex items-center gap-2">

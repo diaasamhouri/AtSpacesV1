@@ -27,6 +27,11 @@ export class ListBranchesQueryDto {
   @IsString()
   search?: string;
 
+  @ApiPropertyOptional({ description: 'Sort by: newest, price_low, price_high' })
+  @IsOptional()
+  @IsString()
+  sort?: string;
+
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()
   @Type(() => Number)

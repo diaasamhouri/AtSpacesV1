@@ -3,17 +3,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../lib/auth-context";
+import { useToast } from "../../../components/ui/toast-provider";
 import { getVendorBranchById, createService, deleteService, updateService, updateBranch } from "../../../../lib/vendor";
+import { formatServiceType, formatPricingInterval } from "../../../../lib/format";
+import StatusBadge from "../../../components/ui/status-badge";
 import dynamic from "next/dynamic";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
+import type { VendorBranchDetail } from "../../../../lib/types";
 
 const MapDisplay = dynamic(() => import("../../../components/map-display"), { ssr: false });
-
-const STATUS_COLORS: Record<string, string> = {
-    ACTIVE: "bg-green-500/10 text-green-500 border border-green-500/20",
-    UNDER_REVIEW: "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20",
-    SUSPENDED: "bg-red-500/100/10 text-red-500 border border-red-500/20",
-};
 
 const COMMON_AMENITIES = [
     "WiFi", "Parking", "Air Conditioning", "Kitchen", "Coffee & Tea",
@@ -43,9 +41,10 @@ function extractCoordsFromUrl(url: string): { lat: number; lng: number } | null 
 export default function VendorBranchDetailPage() {
     const { id } = useParams() as { id: string };
     const { token } = useAuth();
+    const { toast } = useToast();
     const router = useRouter();
 
-    const [branch, setBranch] = useState<any>(null);
+    const [branch, setBranch] = useState<VendorBranchDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -70,6 +69,11 @@ export default function VendorBranchDetailPage() {
     const [googleMapsUrl, setGoogleMapsUrl] = useState("");
     const [mapCoords, setMapCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [savingMap, setSavingMap] = useState(false);
+
+    // Operating hours edit state
+    const [editingHours, setEditingHours] = useState(false);
+    const [hours, setHours] = useState<Record<string, { open: string; close: string } | null>>({});
+    const [savingHours, setSavingHours] = useState(false);
 
     // Confirm dialog for delete service
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -99,7 +103,7 @@ export default function VendorBranchDetailPage() {
             await updateBranch(token, id, { autoAcceptBookings: newValue });
             setBranch({ ...branch, autoAcceptBookings: newValue });
         } catch (err: any) {
-            alert(err.message || "Failed to update booking settings.");
+            toast(err.message || "Failed to update booking settings.", "error");
         }
     };
 
@@ -118,7 +122,7 @@ export default function VendorBranchDetailPage() {
             setShowAddService(false);
             setNewService({ type: "HOT_DESK", name: "", capacity: 1, priceHourly: "", priceDaily: "", priceMonthly: "" });
             loadBranch();
-        } catch (err: any) { alert(err.message || "Failed to add service"); }
+        } catch (err: any) { toast(err.message || "Failed to add service", "error"); }
         setSubmittingService(false);
     };
 
@@ -130,7 +134,7 @@ export default function VendorBranchDetailPage() {
     const handleDeleteServiceConfirm = async () => {
         if (!token || !deleteServiceTarget) return;
         try { await deleteService(token, deleteServiceTarget); loadBranch(); }
-        catch (err: any) { alert(err.message || "Failed to delete service."); }
+        catch (err: any) { toast(err.message || "Failed to delete service.", "error"); }
         setConfirmDeleteOpen(false);
         setDeleteServiceTarget(null);
     };
@@ -157,7 +161,7 @@ export default function VendorBranchDetailPage() {
             await updateService(token, editingServiceId, { name: editService.name, capacity: Number(editService.capacity), pricing });
             setEditingServiceId(null);
             loadBranch();
-        } catch (err: any) { alert(err.message || "Failed to update service."); }
+        } catch (err: any) { toast(err.message || "Failed to update service.", "error"); }
         setSavingEdit(false);
     };
 
@@ -176,8 +180,41 @@ export default function VendorBranchDetailPage() {
         if (!token) return;
         setSavingAmenities(true);
         try { await updateBranch(token, id, { amenities }); setEditingAmenities(false); loadBranch(); }
-        catch { alert("Failed to save amenities."); }
+        catch { toast("Failed to save amenities.", "error"); }
         setSavingAmenities(false);
+    };
+
+    // === Operating Hours handlers ===
+    const initHours = () => {
+        const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+        const current: Record<string, { open: string; close: string } | null> = {};
+        DAYS.forEach((day) => {
+            const h = branch?.operatingHours?.[day];
+            current[day] = h ? { open: h.open, close: h.close } : null;
+        });
+        setHours(current);
+    };
+    const toggleDayClosed = (day: string) => {
+        setHours((prev) => ({
+            ...prev,
+            [day]: prev[day] ? null : { open: "09:00", close: "17:00" },
+        }));
+    };
+    const updateDayTime = (day: string, field: "open" | "close", value: string) => {
+        setHours((prev) => ({
+            ...prev,
+            [day]: prev[day] ? { ...prev[day]!, [field]: value } : { open: "09:00", close: "17:00", [field]: value },
+        }));
+    };
+    const handleSaveHours = async () => {
+        if (!token) return;
+        setSavingHours(true);
+        try {
+            await updateBranch(token, id, { operatingHours: hours });
+            setEditingHours(false);
+            loadBranch();
+        } catch { toast("Failed to save operating hours.", "error"); }
+        setSavingHours(false);
     };
 
     // === Google Maps URL handler ===
@@ -195,7 +232,7 @@ export default function VendorBranchDetailPage() {
             await updateBranch(token, id, data);
             setEditingMap(false);
             loadBranch();
-        } catch { alert("Failed to save map."); }
+        } catch { toast("Failed to save map.", "error"); }
         setSavingMap(false);
     };
 
@@ -205,27 +242,25 @@ export default function VendorBranchDetailPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-800">
+            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-white">{branch.name}</h1>
-                        <p className="mt-1 text-sm font-medium text-slate-400">{branch.address}, {branch.city}</p>
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{branch.name}</h1>
+                        <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">{branch.address}, {branch.city}</p>
                     </div>
-                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold tracking-wider uppercase ${STATUS_COLORS[branch.status] || "bg-slate-500/10 text-slate-400 border border-slate-500/20"}`}>
-                        {branch.status === "UNDER_REVIEW" ? "Under Review" : branch.status}
-                    </span>
+                    <StatusBadge status={branch.status} size="md" />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-4 text-sm font-medium">
-                    {branch.phone && <span className="text-slate-300 flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg> {branch.phone}</span>}
-                    {branch.email && <span className="text-slate-300 flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg> {branch.email}</span>}
+                    {branch.phone && <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg> {branch.phone}</span>}
+                    {branch.email && <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg> {branch.email}</span>}
                 </div>
             </div>
 
             {/* Booking Settings */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-800 flex items-center justify-between">
+            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Booking Settings</h2>
-                    <p className="text-sm font-medium text-slate-300">
+                    <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Booking Settings</h2>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
                         Automatically accept new bookings when capacity allows. If disabled, new requests require manual approval.
                     </p>
                 </div>
@@ -242,9 +277,9 @@ export default function VendorBranchDetailPage() {
             </div>
 
             {/* Location / Map */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-800">
+            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Location</h2>
+                    <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Location</h2>
                     <button onClick={() => setEditingMap(!editingMap)} className="text-xs font-bold text-brand-500 hover:text-brand-400 transition-colors">
                         {editingMap ? "Cancel" : "Edit"}
                     </button>
@@ -254,11 +289,11 @@ export default function VendorBranchDetailPage() {
                     <div className="space-y-4">
                         <input type="url" placeholder="Paste Google Maps link..." value={googleMapsUrl}
                             onChange={(e) => handleGoogleMapsChange(e.target.value)}
-                            className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
+                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
                         {mapCoords && (
-                            <div className="rounded-xl overflow-hidden border border-slate-800">
+                            <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">
                                 <MapDisplay lat={mapCoords.lat} lng={mapCoords.lng} name={branch.name} height="220px" />
-                                <div className="flex gap-6 p-3 bg-dark-850 text-xs font-bold text-slate-400 border-t border-slate-800">
+                                <div className="flex gap-6 p-3 bg-dark-850 text-xs font-bold text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
                                     <span>Lat: {mapCoords.lat.toFixed(6)}</span>
                                     <span>Lng: {mapCoords.lng.toFixed(6)}</span>
                                 </div>
@@ -278,12 +313,12 @@ export default function VendorBranchDetailPage() {
                             </a>
                         )}
                         {(branch.latitude && branch.longitude) ? (
-                            <div className="rounded-xl overflow-hidden shadow-sm border border-slate-800 relative z-0">
+                            <div className="rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800 relative z-0">
                                 <MapDisplay lat={branch.latitude} lng={branch.longitude} name={branch.name} height="240px" />
                             </div>
                         ) : (
-                            <div className="rounded-2xl border border-dashed border-slate-700 bg-dark-850 p-8 text-center">
-                                <p className="text-sm font-medium text-slate-400">No location set. Click "Edit" and paste a Google Maps link to show the map.</p>
+                            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-dark-850 p-8 text-center">
+                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No location set. Click "Edit" and paste a Google Maps link to show the map.</p>
                             </div>
                         )}
                     </>
@@ -291,9 +326,9 @@ export default function VendorBranchDetailPage() {
             </div>
 
             {/* Amenities */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-800">
+            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Amenities & Facilities</h2>
+                    <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Amenities & Facilities</h2>
                     <button onClick={() => { setEditingAmenities(!editingAmenities); setAmenities(branch.amenities || []); }}
                         className="text-xs font-bold text-brand-500 hover:text-brand-400 transition-colors">
                         {editingAmenities ? "Cancel" : "Edit"}
@@ -307,7 +342,7 @@ export default function VendorBranchDetailPage() {
                                 const active = amenities.includes(a);
                                 return (
                                     <button key={a} type="button" onClick={() => toggleAmenity(a)}
-                                        className={`rounded-full px-4 py-2 text-xs font-bold transition-all border ${active ? "bg-brand-500 text-white border-brand-500 shadow-sm" : "bg-dark-850 text-slate-300 border-slate-700 hover:border-slate-500 hover:bg-dark-800"}`}>
+                                        className={`rounded-full px-4 py-2 text-xs font-bold transition-all border ${active ? "bg-brand-500 text-white border-brand-500 shadow-sm" : "bg-dark-850 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-500 hover:bg-gray-100 dark:hover:bg-dark-800"}`}>
                                         {active && <span className="mr-1 opacity-80">✓</span>}{a}
                                     </button>
                                 );
@@ -326,8 +361,8 @@ export default function VendorBranchDetailPage() {
                             <input type="text" value={amenityInput} onChange={(e) => setAmenityInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomAmenity(); } }}
                                 placeholder="Add custom amenity..."
-                                className="flex-1 rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
-                            <button type="button" onClick={addCustomAmenity} className="rounded-xl bg-dark-800 border border-slate-700 px-6 py-3 text-sm font-bold text-white hover:bg-dark-700 transition-colors shadow-sm">Add</button>
+                                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
+                            <button type="button" onClick={addCustomAmenity} className="rounded-xl bg-dark-800 border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-bold text-gray-900 dark:text-white hover:bg-dark-700 transition-colors shadow-sm">Add</button>
                         </div>
                         <div className="flex justify-end pt-2">
                             <button onClick={handleSaveAmenities} disabled={savingAmenities} className="rounded-xl bg-brand-500 active:scale-95 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-all shadow-sm">
@@ -340,80 +375,126 @@ export default function VendorBranchDetailPage() {
                         {(branch.amenities?.length || 0) === 0 ? (
                             <p className="text-sm font-medium text-slate-500 py-4">No amenities set. Click "Edit" to add.</p>
                         ) : branch.amenities.map((a: string, i: number) => (
-                            <span key={i} className="inline-flex rounded-full bg-dark-850 border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300">{a}</span>
+                            <span key={i} className="inline-flex rounded-full bg-dark-850 border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">{a}</span>
                         ))}
                     </div>
                 )}
             </div>
 
             {/* Operating Hours */}
-            {branch.operatingHours && Object.keys(branch.operatingHours).length > 0 && (
-                <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-800">
-                    <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Operating Hours</h2>
+            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Operating Hours</h2>
+                    <button onClick={() => { setEditingHours(!editingHours); if (!editingHours) initHours(); }}
+                        className="text-xs font-bold text-brand-500 hover:text-brand-400 transition-colors">
+                        {editingHours ? "Cancel" : "Edit"}
+                    </button>
+                </div>
+
+                {editingHours ? (
+                    <div className="space-y-3">
+                        {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => (
+                            <div key={day} className="flex items-center gap-3 rounded-xl bg-dark-850 px-4 py-3 border border-slate-200 dark:border-slate-700">
+                                <span className="w-24 text-sm font-bold text-slate-600 dark:text-slate-300 capitalize">{day}</span>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={hours[day] !== null}
+                                        onChange={() => toggleDayClosed(day)}
+                                        className="rounded border-slate-600 text-brand-500 focus:ring-brand-500"
+                                    />
+                                    <span className="text-xs font-medium text-slate-500">{hours[day] ? "Open" : "Closed"}</span>
+                                </label>
+                                {hours[day] && (
+                                    <div className="flex items-center gap-2 ml-auto">
+                                        <input
+                                            type="time"
+                                            value={hours[day]!.open}
+                                            onChange={(e) => updateDayTime(day, "open", e.target.value)}
+                                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-900 px-3 py-1.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                                        />
+                                        <span className="text-slate-500">–</span>
+                                        <input
+                                            type="time"
+                                            value={hours[day]!.close}
+                                            onChange={(e) => updateDayTime(day, "close", e.target.value)}
+                                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-900 px-3 py-1.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        <div className="flex justify-end pt-2">
+                            <button onClick={handleSaveHours} disabled={savingHours} className="rounded-xl bg-brand-500 active:scale-95 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-all shadow-sm">
+                                {savingHours ? "Saving..." : "Save Hours"}
+                            </button>
+                        </div>
+                    </div>
+                ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => {
-                            const hours = branch.operatingHours[day];
+                            const h = branch.operatingHours?.[day];
                             return (
-                                <div key={day} className="rounded-xl bg-dark-850 px-4 py-3 border border-slate-700 shadow-sm">
-                                    <div className="text-xs font-bold text-slate-300 capitalize mb-1">{day}</div>
-                                    <div className="text-sm font-medium text-brand-400">{hours ? `${hours.open} – ${hours.close}` : "Closed"}</div>
+                                <div key={day} className="rounded-xl bg-dark-850 px-4 py-3 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <div className="text-xs font-bold text-slate-600 dark:text-slate-300 capitalize mb-1">{day}</div>
+                                    <div className="text-sm font-medium text-brand-400">{h ? `${h.open} – ${h.close}` : "Closed"}</div>
                                 </div>
                             );
                         })}
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
             {/* Services */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-800">
+            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Services</h2>
+                    <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Services</h2>
                     <button onClick={() => setShowAddService(!showAddService)}
-                        className="rounded-xl bg-dark-800 border border-slate-700 text-white px-5 py-2.5 text-sm font-bold hover:bg-dark-700 transition-colors shadow-sm">
+                        className="rounded-xl bg-dark-800 border border-slate-200 dark:border-slate-700 text-gray-900 dark:text-white px-5 py-2.5 text-sm font-bold hover:bg-dark-700 transition-colors shadow-sm">
                         {showAddService ? "Cancel" : "+ Add Service"}
                     </button>
                 </div>
 
                 {/* Add Service Form */}
                 {showAddService && (
-                    <form onSubmit={handleAddService} className="mb-8 border border-slate-700 rounded-2xl p-6 bg-dark-850 space-y-5 shadow-inner">
-                        <h3 className="text-sm font-bold text-white">New Service</h3>
+                    <form onSubmit={handleAddService} className="mb-8 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 bg-dark-850 space-y-5 shadow-inner">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white">New Service</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
-                                <label className="block text-xs font-bold text-slate-300 mb-2">Type *</label>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Type *</label>
                                 <select required value={newService.type} onChange={(e) => setNewService({ ...newService, type: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
                                     <option value="HOT_DESK">Hot Desk</option>
                                     <option value="PRIVATE_OFFICE">Private Office</option>
                                     <option value="MEETING_ROOM">Meeting Room</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-300 mb-2">Name *</label>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Name *</label>
                                 <input type="text" required value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                                    placeholder="e.g. Quiet Zone Desk" className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
+                                    placeholder="e.g. Quiet Zone Desk" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-300 mb-2">Capacity *</label>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Capacity *</label>
                                 <input type="number" min="1" required value={newService.capacity} onChange={(e) => setNewService({ ...newService, capacity: parseInt(e.target.value) })}
-                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                             </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-6 pt-5 border-t border-slate-800">
+                        <div className="grid grid-cols-3 gap-6 pt-5 border-t border-slate-200 dark:border-slate-800">
                             <div>
-                                <label className="block text-xs font-bold text-slate-300 mb-2">Hourly (JOD)</label>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Hourly (JOD)</label>
                                 <input type="number" step="0.01" value={newService.priceHourly} onChange={(e) => setNewService({ ...newService, priceHourly: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-300 mb-2">Daily (JOD)</label>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Daily (JOD)</label>
                                 <input type="number" step="0.01" value={newService.priceDaily} onChange={(e) => setNewService({ ...newService, priceDaily: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-300 mb-2">Monthly (JOD)</label>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Monthly (JOD)</label>
                                 <input type="number" step="0.01" value={newService.priceMonthly} onChange={(e) => setNewService({ ...newService, priceMonthly: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                             </div>
                         </div>
                         <div className="flex justify-end pt-2">
@@ -427,43 +508,43 @@ export default function VendorBranchDetailPage() {
                 {/* Service list */}
                 <div className="space-y-4">
                     {branch.services?.length === 0 ? (
-                        <div className="text-center py-10 text-sm font-medium text-slate-500 border border-dashed border-slate-700 rounded-2xl bg-dark-850">No services added yet.</div>
+                        <div className="text-center py-10 text-sm font-medium text-slate-500 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-dark-850">No services added yet.</div>
                     ) : (
                         branch.services?.map((svc: any) => (
-                            <div key={svc.id} className="rounded-2xl border border-slate-800 p-5 bg-dark-950 transition-all">
+                            <div key={svc.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-5 bg-dark-950 transition-all">
                                 {editingServiceId === svc.id ? (
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-2">Name</label>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Name</label>
                                                 <input type="text" value={editService.name} onChange={(e) => setEditService({ ...editService, name: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-2">Capacity</label>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Capacity</label>
                                                 <input type="number" min="1" value={editService.capacity} onChange={(e) => setEditService({ ...editService, capacity: parseInt(e.target.value) })}
-                                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-3 gap-4">
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-2">Hourly (JOD)</label>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Hourly (JOD)</label>
                                                 <input type="number" step="0.01" value={editService.priceHourly} onChange={(e) => setEditService({ ...editService, priceHourly: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-2">Daily (JOD)</label>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Daily (JOD)</label>
                                                 <input type="number" step="0.01" value={editService.priceDaily} onChange={(e) => setEditService({ ...editService, priceDaily: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-2">Monthly (JOD)</label>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Monthly (JOD)</label>
                                                 <input type="number" step="0.01" value={editService.priceMonthly} onChange={(e) => setEditService({ ...editService, priceMonthly: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                                             </div>
                                         </div>
                                         <div className="flex justify-end gap-3 pt-2">
-                                            <button onClick={() => setEditingServiceId(null)} className="rounded-xl px-5 py-2 text-sm font-bold text-slate-300 bg-dark-800 border border-slate-700 hover:bg-dark-700 hover:text-white transition-colors">Cancel</button>
+                                            <button onClick={() => setEditingServiceId(null)} className="rounded-xl px-5 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 bg-dark-800 border border-slate-200 dark:border-slate-700 hover:bg-dark-700 hover:text-gray-900 dark:hover:text-white transition-colors">Cancel</button>
                                             <button onClick={handleSaveEdit} disabled={savingEdit} className="rounded-xl px-6 py-2 text-sm font-bold text-white bg-brand-500 active:scale-95 hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-sm">
                                                 {savingEdit ? "Saving..." : "Save"}
                                             </button>
@@ -473,21 +554,21 @@ export default function VendorBranchDetailPage() {
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center flex-wrap gap-2 mb-2">
-                                                <span className="text-lg font-bold text-white">{svc.name}</span>
-                                                <span className="rounded-md bg-brand-500/10 border border-brand-500/20 px-2 py-1 text-[10px] font-bold text-brand-400 uppercase tracking-wider">{svc.type?.replace("_", " ")}</span>
+                                                <span className="text-lg font-bold text-gray-900 dark:text-white">{svc.name}</span>
+                                                <span className="rounded-md bg-brand-500/10 border border-brand-500/20 px-2 py-1 text-[10px] font-bold text-brand-400 tracking-wider">{formatServiceType(svc.type || "")}</span>
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-slate-400 bg-dark-900 p-3 rounded-xl border border-slate-800/50 inline-flex">
+                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-dark-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800/50 inline-flex">
                                                 <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg> {svc.capacity}</span>
                                                 <div className="w-px h-4 bg-slate-700 hidden sm:block"></div>
                                                 {svc.pricing?.map((p: any) => (
                                                     <span key={p.interval} className="flex items-baseline gap-1">
-                                                        <span className="text-xs text-slate-500 uppercase">{p.interval}:</span> <span className="text-white font-bold">JOD {Number(p.price).toFixed(2)}</span>
+                                                        <span className="text-xs text-slate-500 capitalize">{formatPricingInterval(p.interval)}:</span> <span className="text-gray-900 dark:text-white font-bold">JOD {Number(p.price).toFixed(2)}</span>
                                                     </span>
                                                 ))}
                                             </div>
                                         </div>
                                         <div className="flex gap-2 shrink-0 sm:self-start">
-                                            <button onClick={() => startEdit(svc)} className="rounded-lg bg-dark-850 border border-slate-700 px-4 py-2 text-xs font-bold text-white hover:bg-dark-800 transition-colors">Edit</button>
+                                            <button onClick={() => startEdit(svc)} className="rounded-lg bg-dark-850 border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors">Edit</button>
                                             <button onClick={() => handleDeleteServiceClick(svc.id)} className="rounded-lg bg-red-500/100/10 border border-red-500/20 px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-500/100/20 transition-colors">Delete</button>
                                         </div>
                                     </div>

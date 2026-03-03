@@ -8,6 +8,7 @@ import {
   IsOptional,
   Min,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export enum PricingIntervalParam {
   HOURLY = 'HOURLY',
@@ -22,6 +23,27 @@ export enum PaymentMethodParam {
   MASTERCARD = 'MASTERCARD',
   APPLE_PAY = 'APPLE_PAY',
   CASH = 'CASH',
+}
+
+export class CheckAvailabilityQueryDto {
+  @ApiProperty({ description: 'Service ID to check' })
+  @IsUUID()
+  serviceId: string;
+
+  @ApiProperty({ description: 'Start time (ISO 8601)' })
+  @IsDateString()
+  startTime: string;
+
+  @ApiProperty({ description: 'End time (ISO 8601)' })
+  @IsDateString()
+  endTime: string;
+
+  @ApiPropertyOptional({ description: 'Number of people', minimum: 1 })
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? parseInt(value, 10) : undefined))
+  @IsInt()
+  @Min(1)
+  numberOfPeople?: number;
 }
 
 export class CreateBookingDto {
@@ -60,4 +82,9 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ description: 'Optional promo code' })
+  @IsOptional()
+  @IsString()
+  promoCode?: string;
 }

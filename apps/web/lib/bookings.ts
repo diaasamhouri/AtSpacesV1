@@ -5,16 +5,7 @@ import type {
   PricingInterval,
   PaymentMethod,
 } from './types';
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-function authHeaders(token: string): HeadersInit {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
-}
+import { apiFetch } from './api';
 
 export interface CreateBookingData {
   serviceId: string;
@@ -24,85 +15,69 @@ export interface CreateBookingData {
   pricingInterval: PricingInterval;
   paymentMethod: PaymentMethod;
   notes?: string;
+  promoCode?: string;
 }
 
 export async function createBooking(
   token: string,
   data: CreateBookingData,
 ): Promise<Booking> {
-  const res = await fetch(`${API_BASE_URL}/bookings`, {
+  return apiFetch<Booking>('/bookings', {
     method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify(data),
+    token,
+    body: data,
   });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.message || 'Failed to create booking');
-  }
-
-  return res.json();
 }
 
 export async function getMyBookings(
   token: string,
 ): Promise<BookingListResponse> {
-  const res = await fetch(`${API_BASE_URL}/bookings`, {
-    headers: authHeaders(token),
-  });
-
-  if (!res.ok) {
-    throw new Error('Failed to fetch bookings');
-  }
-
-  return res.json();
+  return apiFetch<BookingListResponse>('/bookings', { token });
 }
 
 export async function getBooking(
   token: string,
   id: string,
 ): Promise<Booking> {
-  const res = await fetch(`${API_BASE_URL}/bookings/${id}`, {
-    headers: authHeaders(token),
-  });
-
-  if (!res.ok) {
-    throw new Error('Failed to fetch booking');
-  }
-
-  return res.json();
+  return apiFetch<Booking>(`/bookings/${id}`, { token });
 }
 
 export async function cancelBooking(
   token: string,
   id: string,
 ): Promise<Booking> {
-  const res = await fetch(`${API_BASE_URL}/bookings/${id}/cancel`, {
+  return apiFetch<Booking>(`/bookings/${id}/cancel`, {
     method: 'PATCH',
-    headers: authHeaders(token),
+    token,
   });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.message || 'Failed to cancel booking');
-  }
-
-  return res.json();
 }
 
 export async function checkAvailability(
   serviceId: string,
   startTime: string,
   endTime: string,
+  numberOfPeople?: number,
 ): Promise<AvailabilityResponse> {
-  const params = new URLSearchParams({ serviceId, startTime, endTime });
-  const res = await fetch(
-    `${API_BASE_URL}/bookings/check-availability?${params}`,
-  );
-
-  if (!res.ok) {
-    throw new Error('Failed to check availability');
+  const params: Record<string, string> = { serviceId, startTime, endTime };
+  if (numberOfPeople !== undefined) {
+    params.numberOfPeople = String(numberOfPeople);
   }
+  return apiFetch<AvailabilityResponse>('/bookings/check-availability', {
+    params,
+  });
+}
 
-  return res.json();
+export interface PromoVerifyResponse {
+  valid: boolean;
+  code: string;
+  discountPercent: number;
+}
+
+export async function verifyPromoCode(
+  code: string,
+  serviceId: string,
+): Promise<PromoVerifyResponse> {
+  return apiFetch<PromoVerifyResponse>('/bookings/verify-promo', {
+    params: { code, serviceId },
+  });
 }

@@ -49,15 +49,15 @@ export function Pagination({ meta }: PaginationProps) {
   const pages = getPageNumbers(meta.page, meta.totalPages);
 
   return (
-    <div className="mt-8 flex items-center justify-between border-t border-slate-800 pt-6">
-      <p className="text-sm text-slate-400">
+    <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-6">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Page {meta.page} of {meta.totalPages}
       </p>
       <div className="flex items-center gap-1.5">
         <button
           onClick={() => goToPage(meta.page - 1)}
           disabled={meta.page <= 1}
-          className="rounded-xl border border-slate-700 bg-dark-900 px-4 py-2 text-sm font-bold text-slate-300 transition-colors hover:bg-dark-850 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-dark-900"
+          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 transition-colors hover:bg-gray-50 dark:hover:bg-dark-850 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-dark-900"
         >
           Previous
         </button>
@@ -75,7 +75,7 @@ export function Pagination({ meta }: PaginationProps) {
                 className={`min-w-[2.25rem] rounded-lg px-3 py-2 text-sm font-bold transition-all ${
                   page === meta.page
                     ? 'bg-brand-500 text-white shadow-[0_0_12px_rgba(255,91,4,0.4)]'
-                    : 'text-slate-400 hover:bg-dark-850 hover:text-white'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-dark-850 hover:text-gray-900 dark:hover:text-white'
                 }`}
               >
                 {page}
@@ -87,7 +87,7 @@ export function Pagination({ meta }: PaginationProps) {
         <button
           onClick={() => goToPage(meta.page + 1)}
           disabled={meta.page >= meta.totalPages}
-          className="rounded-xl border border-slate-700 bg-dark-900 px-4 py-2 text-sm font-bold text-slate-300 transition-colors hover:bg-dark-850 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-dark-900"
+          className="rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 transition-colors hover:bg-gray-50 dark:hover:bg-dark-850 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-dark-900"
         >
           Next
         </button>

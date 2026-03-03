@@ -14,6 +14,9 @@ import {
     AdminPaymentsQueryDto,
     AdminBranchesQueryDto,
     AdminApprovalsQueryDto,
+    VerifyVendorDto,
+    SendNotificationDto,
+    UpdateSystemSettingsDto,
 } from './dto';
 
 @ApiTags('Admin')
@@ -42,6 +45,13 @@ export class AdminController {
         return this.adminService.listVendors(query);
     }
 
+    @Get('vendors/:id')
+    @RequireSection(AdminSection.VENDORS)
+    @ApiOperation({ summary: 'Get vendor by ID' })
+    async getVendorById(@Param('id') id: string) {
+        return this.adminService.getVendorById(id);
+    }
+
     @Patch('vendors/:id/status')
     @RequireSection(AdminSection.VENDORS)
     @ApiOperation({ summary: 'Update a vendor status' })
@@ -59,9 +69,9 @@ export class AdminController {
     @ApiOperation({ summary: 'Toggle vendor verified badge' })
     async verifyVendor(
         @Param('id') id: string,
-        @Body() body: { verified: boolean; note?: string },
+        @Body() dto: VerifyVendorDto,
     ) {
-        return this.adminService.verifyVendor(id, body.verified, body.note);
+        return this.adminService.verifyVendor(id, dto.verified, dto.note);
     }
 
 
@@ -97,6 +107,13 @@ export class AdminController {
         return this.adminService.listBookings(query);
     }
 
+    @Get('bookings/:id')
+    @RequireSection(AdminSection.BOOKINGS)
+    @ApiOperation({ summary: 'Get booking by ID' })
+    async getBookingById(@Param('id') id: string) {
+        return this.adminService.getBookingById(id);
+    }
+
     @Patch('bookings/:id/status')
     @RequireSection(AdminSection.BOOKINGS)
     @ApiOperation({ summary: 'Update booking status (cancel, no-show)' })
@@ -130,6 +147,13 @@ export class AdminController {
     @ApiOperation({ summary: 'List all branches' })
     async listBranches(@Query() query: AdminBranchesQueryDto) {
         return this.adminService.listBranches(query);
+    }
+
+    @Get('branches/:id')
+    @RequireSection(AdminSection.BRANCHES)
+    @ApiOperation({ summary: 'Get branch by ID' })
+    async getBranchById(@Param('id') id: string) {
+        return this.adminService.getBranchById(id);
     }
 
     @Patch('branches/:id/status')
@@ -176,9 +200,9 @@ export class AdminController {
     @RequireSection(AdminSection.NOTIFICATIONS)
     @ApiOperation({ summary: 'Send a notification' })
     async sendNotification(
-        @Body() data: { userId?: string; title: string; message: string; type?: string },
+        @Body() dto: SendNotificationDto,
     ) {
-        return this.adminService.sendNotification(data);
+        return this.adminService.sendNotification(dto);
     }
 
     // ==================== ANALYTICS ====================
@@ -216,8 +240,8 @@ export class AdminController {
     @Patch('settings')
     @RequireSection(AdminSection.DASHBOARD)
     @ApiOperation({ summary: 'Update system settings' })
-    async updateSystemSettings(@Req() req: any, @Body() body: { settings: { key: string; value: string }[] }) {
-        return this.adminService.updateSystemSettings(req.user.id, body.settings);
+    async updateSystemSettings(@Req() req: any, @Body() dto: UpdateSystemSettingsDto) {
+        return this.adminService.updateSystemSettings(req.user.id, dto.settings);
     }
 
     // ==================== VENDOR COMMISSIONS ====================

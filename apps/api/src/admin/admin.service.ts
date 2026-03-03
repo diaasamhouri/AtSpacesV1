@@ -8,6 +8,13 @@ import { buildPaginatedResponse } from '../common/helpers/paginate';
 export class AdminService {
     constructor(private prisma: PrismaService) { }
 
+    // ==================== HELPERS ====================
+
+    private async getGlobalCommissionRate(): Promise<number> {
+        const setting = await this.prisma.systemSettings.findUnique({ where: { key: 'DEFAULT_COMMISSION_RATE' } });
+        return setting ? parseFloat(setting.value) : 10;
+    }
+
     // ==================== STATS ====================
 
     async getSystemStats() {
@@ -18,8 +25,9 @@ export class AdminService {
             totalBranches,
             totalBookings,
             activeBookings,
-            totalRevenueData,
+            completedPayments,
             pendingApprovals,
+            globalRate,
         ] = await Promise.all([
             this.prisma.user.count(),
             this.prisma.vendorProfile.count(),
@@ -27,12 +35,22 @@ export class AdminService {
             this.prisma.branch.count(),
             this.prisma.booking.count(),
             this.prisma.booking.count({ where: { status: { in: ['PENDING', 'CONFIRMED'] } } }),
-            this.prisma.payment.aggregate({
+            this.prisma.payment.findMany({
                 where: { status: 'COMPLETED' },
-                _sum: { amount: true },
+                select: { amount: true, booking: { select: { branch: { select: { vendor: { select: { commissionRate: true } } } } } } },
             }),
             this.prisma.approvalRequest.count({ where: { status: 'PENDING' } }),
+            this.getGlobalCommissionRate(),
         ]);
+
+        let grossRevenue = 0;
+        let totalCommission = 0;
+        for (const p of completedPayments) {
+            const amount = p.amount.toNumber();
+            const rate = p.booking.branch.vendor.commissionRate ?? globalRate;
+            grossRevenue += amount;
+            totalCommission += (amount * rate) / 100;
+        }
 
         return {
             users: totalUsers,
@@ -41,7 +59,9 @@ export class AdminService {
             branches: totalBranches,
             bookings: totalBookings,
             activeBookings,
-            revenue: totalRevenueData._sum.amount ? totalRevenueData._sum.amount.toNumber() : 0,
+            revenue: grossRevenue,
+            platformRevenue: totalCommission,
+            vendorPayouts: grossRevenue - totalCommission,
             pendingApprovals,
         };
     }
@@ -92,6 +112,41 @@ export class AdminService {
             })),
             total, page, limit,
         );
+    }
+
+    async getVendorById(id: string) {
+        const vendor = await this.prisma.vendorProfile.findUnique({
+            where: { id },
+            include: {
+                user: { select: { name: true, email: true, phone: true } },
+                branches: {
+                    select: {
+                        id: true, name: true, city: true, address: true, status: true,
+                        _count: { select: { services: true, bookings: true } },
+                    },
+                },
+            },
+        });
+        if (!vendor) throw new NotFoundException('Vendor not found');
+
+        return {
+            id: vendor.id,
+            companyName: vendor.companyName,
+            description: vendor.description,
+            phone: vendor.phone,
+            website: vendor.website,
+            images: vendor.images,
+            status: vendor.status,
+            isVerified: vendor.isVerified,
+            commissionRate: vendor.commissionRate,
+            rejectionReason: vendor.rejectionReason,
+            createdAt: vendor.createdAt,
+            owner: vendor.user,
+            branches: vendor.branches.map(b => ({
+                id: b.id, name: b.name, city: b.city, address: b.address, status: b.status,
+                servicesCount: b._count.services, bookingsCount: b._count.bookings,
+            })),
+        };
     }
 
     async updateVendorStatus(vendorId: string, status: VendorStatus, reason?: string) {
@@ -263,6 +318,43 @@ export class AdminService {
         );
     }
 
+    async getBookingById(id: string) {
+        const booking = await this.prisma.booking.findUnique({
+            where: { id },
+            include: {
+                user: { select: { id: true, name: true, email: true, phone: true } },
+                branch: { select: { id: true, name: true, city: true, address: true, vendor: { select: { companyName: true } } } },
+                service: { select: { id: true, name: true, type: true } },
+                payment: true,
+            },
+        });
+        if (!booking) throw new NotFoundException('Booking not found');
+
+        return {
+            id: booking.id,
+            status: booking.status,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            numberOfPeople: booking.numberOfPeople,
+            totalPrice: booking.totalPrice.toNumber(),
+            currency: booking.currency,
+            notes: booking.notes,
+            createdAt: booking.createdAt,
+            customer: booking.user,
+            branch: booking.branch ? { id: booking.branch.id, name: booking.branch.name, city: booking.branch.city, address: booking.branch.address, vendor: booking.branch.vendor.companyName } : null,
+            service: booking.service,
+            payment: booking.payment ? {
+                id: booking.payment.id,
+                method: booking.payment.method,
+                status: booking.payment.status,
+                amount: booking.payment.amount.toNumber(),
+                currency: booking.payment.currency,
+                paidAt: booking.payment.paidAt,
+                createdAt: booking.payment.createdAt,
+            } : null,
+        };
+    }
+
     async updateBookingStatus(bookingId: string, status: BookingStatus) {
         const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
         if (!booking) throw new NotFoundException('Booking not found');
@@ -286,7 +378,7 @@ export class AdminService {
             where.booking = { user: { name: { contains: query.search, mode: 'insensitive' } } };
         }
 
-        const [payments, total] = await Promise.all([
+        const [payments, total, globalRate] = await Promise.all([
             this.prisma.payment.findMany({
                 where,
                 orderBy: { createdAt: 'desc' },
@@ -296,32 +388,41 @@ export class AdminService {
                     booking: {
                         include: {
                             user: { select: { name: true, email: true } },
-                            branch: { select: { name: true, vendor: { select: { companyName: true } } } },
+                            branch: { select: { name: true, vendor: { select: { companyName: true, commissionRate: true } } } },
                         },
                     },
                 },
             }),
             this.prisma.payment.count({ where }),
+            this.getGlobalCommissionRate(),
         ]);
 
         return buildPaginatedResponse(
-            payments.map(p => ({
-                id: p.id,
-                status: p.status,
-                amount: p.amount.toNumber(),
-                currency: p.currency,
-                method: p.method,
-                transactionId: p.transactionId,
-                paidAt: p.paidAt,
-                createdAt: p.createdAt,
-                booking: {
-                    id: p.booking.id,
-                    status: p.booking.status,
-                    customer: p.booking.user,
-                    branch: p.booking.branch.name,
-                    vendor: p.booking.branch.vendor.companyName,
-                },
-            })),
+            payments.map(p => {
+                const amount = p.amount.toNumber();
+                const rate = p.booking.branch.vendor.commissionRate ?? globalRate;
+                const commissionAmount = (amount * rate) / 100;
+                return {
+                    id: p.id,
+                    status: p.status,
+                    amount,
+                    currency: p.currency,
+                    method: p.method,
+                    transactionId: p.transactionId,
+                    paidAt: p.paidAt,
+                    createdAt: p.createdAt,
+                    commissionRate: rate,
+                    commissionAmount,
+                    vendorEarnings: amount - commissionAmount,
+                    booking: {
+                        id: p.booking.id,
+                        status: p.booking.status,
+                        customer: p.booking.user,
+                        branch: p.booking.branch.name,
+                        vendor: p.booking.branch.vendor.companyName,
+                    },
+                };
+            }),
             total, page, limit,
         );
     }
@@ -331,7 +432,7 @@ export class AdminService {
         if (!payment) throw new NotFoundException('Payment not found');
         if (payment.status !== 'COMPLETED') throw new BadRequestException('Only completed payments can be refunded');
 
-        return this.prisma.$transaction([
+        const result = await this.prisma.$transaction([
             this.prisma.payment.update({
                 where: { id: paymentId },
                 data: { status: 'REFUNDED' },
@@ -341,6 +442,24 @@ export class AdminService {
                 data: { status: 'CANCELLED' },
             }),
         ]);
+
+        // Notify customer about the refund
+        const booking = await this.prisma.booking.findUnique({
+            where: { id: payment.bookingId },
+            select: { userId: true, branch: { select: { name: true } } },
+        });
+        if (booking) {
+            await this.prisma.notification.create({
+                data: {
+                    userId: booking.userId,
+                    type: 'PAYMENT_SUCCESS',
+                    title: 'Payment Refunded',
+                    message: `Your payment for the booking at ${booking.branch.name} has been refunded.`,
+                },
+            });
+        }
+
+        return result;
     }
 
     // ==================== BRANCHES ====================
@@ -389,6 +508,45 @@ export class AdminService {
         );
     }
 
+    async getBranchById(id: string) {
+        const branch = await this.prisma.branch.findUnique({
+            where: { id },
+            include: {
+                vendor: { select: { id: true, companyName: true, status: true } },
+                services: {
+                    include: { pricing: true },
+                },
+            },
+        });
+        if (!branch) throw new NotFoundException('Branch not found');
+
+        return {
+            id: branch.id,
+            name: branch.name,
+            address: branch.address,
+            city: branch.city,
+            status: branch.status,
+            phone: branch.phone,
+            email: branch.email,
+            latitude: branch.latitude ? Number(branch.latitude) : null,
+            longitude: branch.longitude ? Number(branch.longitude) : null,
+            images: branch.images,
+            amenities: branch.amenities,
+            operatingHours: branch.operatingHours,
+            googleMapsUrl: branch.googleMapsUrl,
+            autoAcceptBookings: branch.autoAcceptBookings,
+            createdAt: branch.createdAt,
+            vendor: branch.vendor,
+            services: branch.services.map(s => ({
+                id: s.id,
+                name: s.name,
+                type: s.type,
+                capacity: s.capacity,
+                pricing: s.pricing.map(p => ({ interval: p.interval, price: p.price.toNumber(), currency: p.currency })),
+            })),
+        };
+    }
+
     async updateBranchStatus(branchId: string, status: 'ACTIVE' | 'SUSPENDED' | 'UNDER_REVIEW') {
         const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
         if (!branch) throw new NotFoundException('Branch not found');
@@ -415,6 +573,9 @@ export class AdminService {
                     branch: {
                         select: { name: true, vendor: { select: { companyName: true } } },
                     },
+                    vendorProfile: {
+                        select: { companyName: true, user: { select: { name: true, email: true } } },
+                    },
                 },
             }),
             this.prisma.approvalRequest.count(),
@@ -430,8 +591,8 @@ export class AdminService {
                 reason: r.reason,
                 reviewedAt: r.reviewedAt,
                 createdAt: r.createdAt,
-                branch: r.branch.name,
-                vendor: r.branch.vendor.companyName,
+                branch: r.branch?.name || null,
+                vendor: r.branch?.vendor?.companyName || r.vendorProfile?.companyName || 'Unknown',
             })),
             total, page, limit,
         );
@@ -441,7 +602,7 @@ export class AdminService {
         const req = await this.prisma.approvalRequest.findUnique({ where: { id: requestId } });
         if (!req) throw new NotFoundException('Approval request not found');
 
-        return this.prisma.approvalRequest.update({
+        const updated = await this.prisma.approvalRequest.update({
             where: { id: requestId },
             data: {
                 status,
@@ -450,6 +611,33 @@ export class AdminService {
                 reviewedAt: new Date(),
             },
         });
+
+        // For vendor registration requests, also update the vendor profile status
+        if (req.type === 'VENDOR_REGISTRATION' && req.vendorProfileId) {
+            const vendorProfile = await this.prisma.vendorProfile.update({
+                where: { id: req.vendorProfileId },
+                data: {
+                    status: status === 'APPROVED' ? 'APPROVED' : 'REJECTED',
+                    ...(status === 'REJECTED' && reason ? { rejectionReason: reason } : {}),
+                    ...(status === 'APPROVED' ? { rejectionReason: null } : {}),
+                },
+                include: { user: { select: { id: true, name: true } } },
+            });
+
+            // Notify the vendor about the decision
+            await this.prisma.notification.create({
+                data: {
+                    userId: vendorProfile.user.id,
+                    type: status === 'APPROVED' ? 'VENDOR_APPROVED' : 'VENDOR_REJECTED',
+                    title: status === 'APPROVED' ? 'Vendor Application Approved' : 'Vendor Application Rejected',
+                    message: status === 'APPROVED'
+                        ? `Congratulations! Your vendor application for ${vendorProfile.companyName} has been approved. You can now start adding branches.`
+                        : `Your vendor application for ${vendorProfile.companyName} was rejected.${reason ? ` Reason: ${reason}` : ''}`,
+                },
+            });
+        }
+
+        return updated;
     }
 
     // ==================== NOTIFICATIONS ====================
@@ -489,22 +677,41 @@ export class AdminService {
     // ==================== ANALYTICS ====================
 
     async getRevenueAnalytics() {
-        const payments = await this.prisma.payment.findMany({
-            where: { status: 'COMPLETED' },
-            orderBy: { paidAt: 'asc' },
-            select: { amount: true, paidAt: true, createdAt: true },
-        });
+        const [payments, globalRate] = await Promise.all([
+            this.prisma.payment.findMany({
+                where: { status: 'COMPLETED' },
+                orderBy: { paidAt: 'asc' },
+                select: { amount: true, paidAt: true, createdAt: true, booking: { select: { branch: { select: { vendor: { select: { commissionRate: true } } } } } } },
+            }),
+            this.getGlobalCommissionRate(),
+        ]);
 
-        const byMonth: Record<string, number> = {};
+        const byMonth: Record<string, { gross: number; commission: number; net: number }> = {};
+        let totalGross = 0;
+        let totalCommission = 0;
+
         payments.forEach(p => {
+            const amount = p.amount.toNumber();
+            const rate = p.booking.branch.vendor.commissionRate ?? globalRate;
+            const commission = (amount * rate) / 100;
+            totalGross += amount;
+            totalCommission += commission;
+
             const date = p.paidAt || p.createdAt;
             const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            byMonth[key] = (byMonth[key] || 0) + p.amount.toNumber();
+            const entry = byMonth[key] || { gross: 0, commission: 0, net: 0 };
+            entry.gross += amount;
+            entry.commission += commission;
+            entry.net += amount - commission;
+            byMonth[key] = entry;
         });
 
         return {
-            monthly: Object.entries(byMonth).map(([month, total]) => ({ month, total })),
-            totalRevenue: payments.reduce((sum, p) => sum + p.amount.toNumber(), 0),
+            monthly: Object.entries(byMonth).map(([month, v]) => ({ month, total: v.gross, gross: v.gross, commission: v.commission, net: v.net })),
+            totalRevenue: totalGross,
+            totalGross,
+            totalCommission,
+            totalNet: totalGross - totalCommission,
         };
     }
 
@@ -591,7 +798,7 @@ export class AdminService {
 
         const updated = await this.prisma.vendorProfile.update({
             where: { id: vendorId },
-            data: { commissionRate } as any,
+            data: { commissionRate },
             include: { user: { select: { name: true, email: true } } },
         });
 
@@ -623,10 +830,7 @@ export class AdminService {
             orderBy: { paidAt: 'desc' }
         });
 
-        const defaultCommissionSetting = await this.prisma.systemSettings.findUnique({
-            where: { key: 'DEFAULT_COMMISSION_RATE' }
-        });
-        const globalRate = defaultCommissionSetting ? parseFloat(defaultCommissionSetting.value) : 10;
+        const globalRate = await this.getGlobalCommissionRate();
 
         let csv = 'Payment ID,Date,Vendor,Branch,Total Amount,Commission Rate (%),Commission Amount,Vendor Earnings\n';
 

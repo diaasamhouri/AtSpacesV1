@@ -48,6 +48,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [authorized, setAuthorized] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('admin-sidebar-collapsed');
+    if (saved === 'true') setCollapsed(true);
+  }, []);
 
   useEffect(() => {
     if (isLoading) return;
@@ -61,6 +67,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Close mobile nav on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      localStorage.setItem('admin-sidebar-collapsed', String(!prev));
+      return !prev;
+    });
+  };
 
   if (isLoading || !authorized) {
     return (
@@ -76,19 +89,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const sidebarContent = (
     <>
-      <div className="mb-6 px-3">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 border border-brand-500/20 ring-2 ring-brand-500/10">
-            <SidebarIcon name="Shield" className="h-5 w-5 text-brand-500" />
-          </div>
-          <div className="min-w-0">
-            <span className="inline-flex items-center rounded-full bg-brand-500/10 border border-brand-500/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-500">
-              {ROLE_LABELS[role] || role}
-            </span>
-            <p className="mt-1 text-sm font-medium text-white truncate">Admin Console</p>
+      {!collapsed && (
+        <div className="mb-6 px-3">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 border border-brand-500/20 ring-2 ring-brand-500/10">
+              <SidebarIcon name="Shield" className="h-5 w-5 text-brand-500" />
+            </div>
+            <div className="min-w-0">
+              <span className="inline-flex items-center rounded-full bg-brand-500/10 border border-brand-500/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-500">
+                {ROLE_LABELS[role] || role}
+              </span>
+              <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white truncate">Admin Console</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
       <nav className="space-y-1.5">
         {visibleLinks.map((link) => {
           const isActive = pathname === link.href || (link.href !== "/admin" && pathname.startsWith(link.href));
@@ -96,14 +111,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link
               key={link.href}
               href={link.href}
-              className={`relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all ${isActive
+              title={collapsed ? link.label : undefined}
+              className={`relative flex items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-xl ${collapsed ? 'px-2' : 'px-4'} py-3 text-sm font-bold transition-all ${isActive
                 ? "bg-brand-500/10 text-white"
-                : "text-slate-400 hover:bg-dark-850 hover:text-white"
+                : "text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-dark-850 hover:text-gray-900 dark:hover:text-white"
                 }`}
             >
               {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-[3px] rounded-r-full bg-brand-500" />}
-              <SidebarIcon name={link.icon} className={`h-5 w-5 ${isActive ? "text-brand-500" : ""}`} />
-              {link.label}
+              <SidebarIcon name={link.icon} className={`h-5 w-5 shrink-0 ${isActive ? "text-brand-500" : ""}`} />
+              {!collapsed && link.label}
             </Link>
           );
         })}
@@ -119,9 +135,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="md:hidden flex items-center justify-between">
             <button
               onClick={() => setMobileOpen(true)}
-              className="flex items-center gap-2 rounded-xl bg-dark-900 border border-slate-800 px-4 py-2.5 text-sm font-bold text-white"
+              className="flex items-center gap-2 rounded-xl bg-dark-900 border border-slate-200 dark:border-slate-800 px-4 py-2.5 text-sm font-bold text-gray-900 dark:text-white"
             >
-              <svg className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+              <svg className="h-5 w-5 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
               </svg>
               Menu
@@ -132,10 +148,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {mobileOpen && (
             <div className="fixed inset-0 z-50 md:hidden">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-              <aside className="absolute left-0 top-0 h-full w-72 bg-dark-950 border-r border-slate-800/50 p-6 overflow-y-auto animate-in slide-in-from-left duration-300">
+              <aside className="absolute left-0 top-0 h-full w-72 bg-dark-950 border-r border-slate-200 dark:border-slate-800/50 p-6 overflow-y-auto animate-in slide-in-from-left duration-300">
                 <div className="flex items-center justify-between mb-6">
-                  <span className="text-sm font-bold text-white">Navigation</span>
-                  <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-dark-850 hover:text-white transition-colors">
+                  <span className="text-sm font-bold text-gray-900 dark:text-white">Navigation</span>
+                  <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1.5 text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-dark-850 hover:text-gray-900 dark:hover:text-white transition-colors">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
                     </svg>
@@ -147,8 +163,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           )}
 
           {/* Desktop sidebar */}
-          <aside className="hidden md:block w-64 shrink-0 border-r border-slate-800/50 pr-6">
+          <aside className={`hidden md:flex flex-col ${collapsed ? 'w-16' : 'w-64'} shrink-0 border-r border-slate-200 dark:border-slate-800/50 pr-2 transition-all duration-300`}>
             {sidebarContent}
+            {/* Collapse toggle */}
+            <button
+              onClick={toggleCollapsed}
+              className="mt-4 flex items-center justify-center rounded-xl px-2 py-2.5 text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-dark-850 hover:text-gray-900 dark:hover:text-white transition-colors"
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              <svg
+                className={`h-5 w-5 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
+              </svg>
+            </button>
           </aside>
 
           {/* Main Content */}
@@ -156,7 +185,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {/* Greeting bar */}
             <div className="mb-8 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <h2 className="text-xl font-bold text-white">{getGreeting()}, {firstName}</h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">{getGreeting()}, {firstName}</h2>
                 <span className="inline-flex items-center rounded-full bg-brand-500/10 border border-brand-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-500">
                   {ROLE_LABELS[role] || role}
                 </span>

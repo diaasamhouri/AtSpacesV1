@@ -1,4 +1,4 @@
-const API_BASE_URL =
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export class ApiError extends Error {
@@ -12,15 +12,18 @@ export class ApiError extends Error {
   }
 }
 
-interface FetchOptions extends RequestInit {
+interface FetchOptions extends Omit<RequestInit, 'body'> {
   params?: Record<string, string | number | undefined>;
+  token?: string;
+  body?: unknown;
+  responseType?: 'json' | 'text';
 }
 
 export async function apiFetch<T>(
   path: string,
   options: FetchOptions = {},
 ): Promise<T> {
-  const { params, ...fetchOptions } = options;
+  const { params, token, body, responseType = 'json', ...fetchOptions } = options;
 
   const url = new URL(path, API_BASE_URL);
   if (params) {
@@ -31,21 +34,37 @@ export async function apiFetch<T>(
     });
   }
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(fetchOptions.headers as Record<string, string>),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(url.toString(), {
     ...fetchOptions,
-    headers: {
-      'Content-Type': 'application/json',
-      ...fetchOptions.headers,
-    },
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
+    const errorBody = await response.json().catch(() => null);
     throw new ApiError(
       response.status,
       response.statusText,
-      body?.message || undefined,
+      errorBody?.message || undefined,
     );
+  }
+
+  // Handle 204 No Content
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  if (responseType === 'text') {
+    return response.text() as Promise<T>;
   }
 
   return response.json() as Promise<T>;

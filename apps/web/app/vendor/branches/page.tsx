@@ -4,18 +4,20 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getVendorBranches } from "../../../lib/vendor";
 import { useAuth } from "../../../lib/auth-context";
+import { formatServiceType } from "../../../lib/format";
 import StatusBadge from "../../components/ui/status-badge";
 
 export default function VendorBranches() {
     const { token } = useAuth();
     const [branches, setBranches] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     useEffect(() => {
         if (!token) return;
         getVendorBranches(token)
             .then((res) => { setBranches(res.data); setLoading(false); })
-            .catch(() => setLoading(false));
+            .catch(() => { setError("Failed to load branches."); setLoading(false); });
     }, [token]);
 
     if (loading) {
@@ -28,23 +30,28 @@ export default function VendorBranches() {
 
     return (
         <div className="space-y-6">
+            {error && (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm font-medium text-red-400 mb-6">
+                    {error}
+                </div>
+            )}
             <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-white">Branches & Services</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Branches & Services</h1>
                 <Link href="/vendor/branches/new" className="rounded-xl bg-brand-500 active:scale-95 px-6 py-3 text-sm font-bold text-white hover:bg-brand-600 hover:-translate-y-0.5 shadow-[0_4px_12px_rgba(255,91,4,0.3)] transition-all">
                     Add New Branch
                 </Link>
             </div>
 
-            <div className="overflow-hidden rounded-2xl bg-dark-900 shadow-float border border-slate-800">
+            <div className="overflow-hidden rounded-2xl bg-dark-900 shadow-float border border-slate-200 dark:border-slate-800">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-800">
                         <thead className="bg-dark-850">
                             <tr>
-                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Branch Name</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">City / Address</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Services</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Status</th>
-                                <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-400">Actions</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Branch Name</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">City / Address</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Services</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                                <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/50">
@@ -56,20 +63,20 @@ export default function VendorBranches() {
                                 </tr>
                             ) : (
                                 branches.map((branch) => (
-                                    <tr key={branch.id} className="even:bg-dark-850/30 hover:bg-dark-850/60 transition-colors">
+                                    <tr key={branch.id} className="even:bg-dark-850/30 hover:bg-gray-50 dark:hover:bg-dark-850/60 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="text-sm font-bold text-white">{branch.name}</div>
+                                            <div className="text-sm font-bold text-gray-900 dark:text-white">{branch.name}</div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="text-sm font-medium text-slate-300 mb-0.5">{branch.city}</div>
+                                            <div className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-0.5">{branch.city}</div>
                                             <div className="text-xs text-slate-500">{branch.address}</div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-wrap gap-2">
                                                 {branch.services?.length > 0 ? (
                                                     branch.services.map((s: any) => (
-                                                        <span key={s.id} className="inline-flex rounded-md uppercase tracking-wider bg-brand-500/10 border border-brand-500/20 px-2.5 py-1 text-[10px] font-bold text-brand-400">
-                                                            {s.type.replace("_", " ")}
+                                                        <span key={s.id} className="inline-flex rounded-md tracking-wider bg-brand-500/10 border border-brand-500/20 px-2.5 py-1 text-[10px] font-bold text-brand-400">
+                                                            {formatServiceType(s.type)}
                                                         </span>
                                                     ))
                                                 ) : (
@@ -78,10 +85,7 @@ export default function VendorBranches() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <StatusBadge
-                                                status={branch.status}
-                                                label={branch.status === "UNDER_REVIEW" ? "UNDER REVIEW" : branch.status}
-                                            />
+                                            <StatusBadge status={branch.status} />
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <Link href={`/vendor/branches/${branch.id}`} className="text-sm font-bold text-brand-500 hover:text-brand-400 transition-colors">

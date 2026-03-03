@@ -48,7 +48,7 @@ export function SearchBar({ defaultValue = '', placeholder = 'Search by name, lo
   return (
     <div className="relative">
       <svg
-        className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+        className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500 dark:text-slate-400"
         fill="none"
         viewBox="0 0 24 24"
         strokeWidth="1.5"
@@ -61,11 +61,11 @@ export function SearchBar({ defaultValue = '', placeholder = 'Search by name, lo
         />
       </svg>
       <input
-        type="text"
+        type="search"
         value={value}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-700 bg-dark-900 py-3 pl-10 pr-4 text-sm text-white shadow-inner placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
+        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-white shadow-inner placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
       />
     </div>
   );

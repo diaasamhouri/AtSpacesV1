@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BookingsService } from './bookings.service';
 import {
   CreateBookingDto,
+  CheckAvailabilityQueryDto,
   BookingResponseDto,
   BookingListResponseDto,
   AvailabilityResponseDto,
@@ -51,15 +52,12 @@ export class BookingsController {
   @Get('check-availability')
   @ApiOperation({ summary: 'Check service availability for a time range' })
   @ApiResponse({ status: 200, type: AvailabilityResponseDto })
-  async checkAvailability(
-    @Query('serviceId') serviceId: string,
-    @Query('startTime') startTime: string,
-    @Query('endTime') endTime: string,
-  ) {
+  async checkAvailability(@Query() query: CheckAvailabilityQueryDto) {
     return this.bookingsService.checkAvailability(
-      serviceId,
-      startTime,
-      endTime,
+      query.serviceId,
+      query.startTime,
+      query.endTime,
+      query.numberOfPeople,
     );
   }
 

@@ -4,18 +4,20 @@ import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { getAdminPayments, refundPayment, exportRevenueCSV } from "../../../lib/admin";
 import { useAuth } from "../../../lib/auth-context";
+import { useToast } from "../../components/ui/toast-provider";
 import { format } from "date-fns";
 import StatusBadge from "../../components/ui/status-badge";
 import { Pagination } from "../../components/pagination";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
-import type { PaginationMeta } from "../../../lib/types";
+import type { PaginationMeta, AdminPayment } from "../../../lib/types";
 
 const STATUSES = ["ALL", "PENDING", "COMPLETED", "FAILED", "REFUNDED"];
 
 export default function AdminPaymentsPage() {
     const { token } = useAuth();
+    const { toast } = useToast();
     const searchParams = useSearchParams();
-    const [payments, setPayments] = useState<any[]>([]);
+    const [payments, setPayments] = useState<AdminPayment[]>([]);
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
@@ -50,7 +52,7 @@ export default function AdminPaymentsPage() {
         try {
             await refundPayment(token!, refundTarget);
             setPayments((prev) => prev.map((p) => (p.id === refundTarget ? { ...p, status: "REFUNDED" } : p)));
-        } catch { alert("Failed to refund payment."); }
+        } catch { toast("Failed to refund payment.", "error"); }
         setConfirmOpen(false);
         setRefundTarget(null);
     };
@@ -69,7 +71,7 @@ export default function AdminPaymentsPage() {
             link.click();
             document.body.removeChild(link);
         } catch {
-            alert('Failed to export CSV data');
+            toast('Failed to export CSV data', "error");
         } finally {
             setExporting(false);
         }
@@ -78,7 +80,7 @@ export default function AdminPaymentsPage() {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-white">Payments Management</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Payments Management</h1>
                 <button
                     onClick={handleExport}
                     disabled={exporting}
@@ -98,7 +100,7 @@ export default function AdminPaymentsPage() {
             <div className="flex flex-wrap gap-2">
                 {STATUSES.map((s) => (
                     <button key={s} onClick={() => setFilter(s)}
-                        className={`rounded-xl px-4 py-2 text-xs font-bold transition-all duration-300 ${filter === s ? "bg-brand-500 text-white shadow-[0_2px_8px_rgba(255,91,4,0.4)]" : "bg-dark-850 text-slate-400 border border-slate-700 hover:text-white hover:border-slate-500"}`}>
+                        className={`rounded-xl px-4 py-2 text-xs font-bold transition-all duration-300 ${filter === s ? "bg-brand-500 text-white shadow-[0_2px_8px_rgba(255,91,4,0.4)]" : "bg-dark-850 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:text-gray-900 dark:hover:text-white hover:border-slate-500"}`}>
                         {s}
                     </button>
                 ))}
@@ -109,39 +111,43 @@ export default function AdminPaymentsPage() {
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-2xl bg-dark-900 shadow-float border border-slate-800">
+                <div className="overflow-hidden rounded-2xl bg-dark-900 shadow-float border border-slate-200 dark:border-slate-800">
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-slate-800">
                             <thead className="bg-dark-850">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Customer</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Vendor / Branch</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Amount</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Method</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Status</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Date</th>
-                                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-400">Actions</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Customer</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Vendor / Branch</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Commission</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Vendor Payout</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Method</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
+                                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/50">
                                 {payments.length === 0 ? (
-                                    <tr><td colSpan={7} className="px-6 py-8 text-center text-sm font-medium text-slate-500">No payments found.</td></tr>
+                                    <tr><td colSpan={9} className="px-6 py-8 text-center text-sm font-medium text-slate-500">No payments found.</td></tr>
                                 ) : payments.map((p) => (
-                                    <tr key={p.id} className="even:bg-dark-850/30 hover:bg-dark-850/60 transition-colors">
+                                    <tr key={p.id} className="even:bg-dark-850/30 hover:bg-gray-50 dark:hover:bg-dark-850/60 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="text-sm font-bold text-white">{p.booking?.customer?.name || "\u2014"}</div>
-                                            <div className="text-xs font-medium text-slate-400">{p.booking?.customer?.email}</div>
+                                            <div className="text-sm font-bold text-gray-900 dark:text-white">{p.booking?.customer?.name || "\u2014"}</div>
+                                            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{p.booking?.customer?.email}</div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="text-sm font-bold text-white">{p.booking?.vendor}</div>
-                                            <div className="text-xs font-medium text-slate-400">{p.booking?.branch}</div>
+                                            <div className="text-sm font-bold text-gray-900 dark:text-white">{p.booking?.vendor}</div>
+                                            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{p.booking?.branch}</div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">JOD {p.amount.toFixed(2)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-400">{p.method}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">JOD {p.amount.toFixed(2)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-500">JOD {p.commissionAmount.toFixed(2)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-emerald-500">JOD {p.vendorEarnings.toFixed(2)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-500 dark:text-slate-400">{p.method}</td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <StatusBadge status={p.status} />
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-400">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-500 dark:text-slate-400">
                                             {p.paidAt ? format(new Date(p.paidAt), "MMM d, yyyy") : format(new Date(p.createdAt), "MMM d, yyyy")}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm">

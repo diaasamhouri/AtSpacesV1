@@ -1,246 +1,189 @@
-import { API_BASE_URL } from './api';
-
-function authHeaders(token: string): HeadersInit {
-    return {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-    };
-}
+import { apiFetch } from './api';
+import type {
+    AdminStats,
+    AdminVendor,
+    AdminUser,
+    AdminBooking,
+    AdminPayment,
+    AdminBranch,
+    AdminApproval,
+    AdminNotification,
+    RevenueAnalytics,
+    BookingAnalytics,
+    UserGrowthAnalytics,
+    SystemSetting,
+    PaginatedResponse,
+    AdminVendorDetail,
+    AdminBookingDetail,
+    AdminBranchDetail,
+} from './types';
 
 // ==================== DASHBOARD ====================
 
-export async function getAdminStats(token: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/stats`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch admin stats');
-    return res.json();
+export async function getAdminStats(token: string): Promise<AdminStats> {
+    return apiFetch<AdminStats>('/admin/stats', { token });
 }
 
 // ==================== VENDORS ====================
 
-export async function getAdminVendors(token: string, params?: { page?: number; limit?: number; search?: string }): Promise<any> {
-    const qs = new URLSearchParams();
-    if (params?.page) qs.set('page', String(params.page));
-    if (params?.limit) qs.set('limit', String(params.limit));
-    if (params?.search) qs.set('search', params.search);
-    const query = qs.toString();
-    const res = await fetch(`${API_BASE_URL}/admin/vendors${query ? `?${query}` : ''}`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch vendors');
-    return res.json();
+export async function getAdminVendors(token: string, params?: { page?: number; limit?: number; search?: string }): Promise<PaginatedResponse<AdminVendor>> {
+    return apiFetch<PaginatedResponse<AdminVendor>>('/admin/vendors', {
+        token, params: { page: params?.page, limit: params?.limit, search: params?.search },
+    });
+}
+
+export async function getAdminVendorById(token: string, id: string): Promise<AdminVendorDetail> {
+    return apiFetch<AdminVendorDetail>(`/admin/vendors/${id}`, { token });
 }
 
 export async function updateVendorStatus(
     token: string, id: string, status: string, reason?: string
-): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/vendors/${id}/status`, {
-        method: 'PATCH', headers: authHeaders(token),
-        body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
+): Promise<AdminVendor> {
+    return apiFetch<AdminVendor>(`/admin/vendors/${id}/status`, {
+        method: 'PATCH', token, body: { status, ...(reason ? { reason } : {}) },
     });
-    if (!res.ok) throw new Error('Failed to update vendor status');
-    return res.json();
 }
 
 export async function verifyVendor(
     token: string, id: string, verified: boolean, note?: string
-): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/vendors/${id}/verify`, {
-        method: 'PATCH', headers: authHeaders(token),
-        body: JSON.stringify({ verified, ...(note ? { note } : {}) }),
+): Promise<AdminVendor> {
+    return apiFetch<AdminVendor>(`/admin/vendors/${id}/verify`, {
+        method: 'PATCH', token, body: { verified, ...(note ? { note } : {}) },
     });
-    if (!res.ok) throw new Error('Failed to verify vendor');
-    return res.json();
 }
 
 // ==================== USERS ====================
 
-export async function getAdminUsers(token: string, params?: { page?: number; limit?: number; search?: string }): Promise<any> {
-    const qs = new URLSearchParams();
-    if (params?.page) qs.set('page', String(params.page));
-    if (params?.limit) qs.set('limit', String(params.limit));
-    if (params?.search) qs.set('search', params.search);
-    const query = qs.toString();
-    const res = await fetch(`${API_BASE_URL}/admin/users${query ? `?${query}` : ''}`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch users');
-    return res.json();
+export async function getAdminUsers(token: string, params?: { page?: number; limit?: number; search?: string }): Promise<PaginatedResponse<AdminUser>> {
+    return apiFetch<PaginatedResponse<AdminUser>>('/admin/users', {
+        token, params: { page: params?.page, limit: params?.limit, search: params?.search },
+    });
 }
 
 export async function createTeamUser(
     token: string, data: { name: string; email: string; password: string; role: string }
-): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/users`, {
-        method: 'POST', headers: authHeaders(token), body: JSON.stringify(data),
-    });
-    if (!res.ok) { const err = await res.json().catch(() => null); throw new Error(err?.message || 'Failed to create user'); }
-    return res.json();
+): Promise<AdminUser> {
+    return apiFetch<AdminUser>('/admin/users', { method: 'POST', token, body: data });
 }
 
-export async function toggleUserActive(token: string, id: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/users/${id}/toggle-active`, {
-        method: 'PATCH', headers: authHeaders(token),
-    });
-    if (!res.ok) throw new Error('Failed to toggle user status');
-    return res.json();
+export async function toggleUserActive(token: string, id: string): Promise<AdminUser> {
+    return apiFetch<AdminUser>(`/admin/users/${id}/toggle-active`, { method: 'PATCH', token });
 }
 
 // ==================== BOOKINGS ====================
 
-export async function getAdminBookings(token: string, params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<any> {
-    const qs = new URLSearchParams();
-    if (params?.page) qs.set('page', String(params.page));
-    if (params?.limit) qs.set('limit', String(params.limit));
-    if (params?.search) qs.set('search', params.search);
-    if (params?.status) qs.set('status', params.status);
-    const query = qs.toString();
-    const res = await fetch(`${API_BASE_URL}/admin/bookings${query ? `?${query}` : ''}`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch bookings');
-    return res.json();
+export async function getAdminBookings(token: string, params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<PaginatedResponse<AdminBooking>> {
+    return apiFetch<PaginatedResponse<AdminBooking>>('/admin/bookings', {
+        token, params: { page: params?.page, limit: params?.limit, search: params?.search, status: params?.status },
+    });
 }
 
-export async function updateBookingStatus(token: string, id: string, status: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/bookings/${id}/status`, {
-        method: 'PATCH', headers: authHeaders(token), body: JSON.stringify({ status }),
-    });
-    if (!res.ok) throw new Error('Failed to update booking');
-    return res.json();
+export async function getAdminBookingById(token: string, id: string): Promise<AdminBookingDetail> {
+    return apiFetch<AdminBookingDetail>(`/admin/bookings/${id}`, { token });
+}
+
+export async function updateBookingStatus(token: string, id: string, status: string): Promise<AdminBooking> {
+    return apiFetch<AdminBooking>(`/admin/bookings/${id}/status`, { method: 'PATCH', token, body: { status } });
 }
 
 // ==================== PAYMENTS ====================
 
-export async function getAdminPayments(token: string, params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<any> {
-    const qs = new URLSearchParams();
-    if (params?.page) qs.set('page', String(params.page));
-    if (params?.limit) qs.set('limit', String(params.limit));
-    if (params?.search) qs.set('search', params.search);
-    if (params?.status) qs.set('status', params.status);
-    const query = qs.toString();
-    const res = await fetch(`${API_BASE_URL}/admin/payments${query ? `?${query}` : ''}`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch payments');
-    return res.json();
+export async function getAdminPayments(token: string, params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<PaginatedResponse<AdminPayment>> {
+    return apiFetch<PaginatedResponse<AdminPayment>>('/admin/payments', {
+        token, params: { page: params?.page, limit: params?.limit, search: params?.search, status: params?.status },
+    });
 }
 
-export async function refundPayment(token: string, id: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/payments/${id}/refund`, {
-        method: 'PATCH', headers: authHeaders(token),
-    });
-    if (!res.ok) throw new Error('Failed to refund payment');
-    return res.json();
+export async function refundPayment(token: string, id: string): Promise<AdminPayment> {
+    return apiFetch<AdminPayment>(`/admin/payments/${id}/refund`, { method: 'PATCH', token });
 }
 
 // ==================== BRANCHES ====================
 
-export async function getAdminBranches(token: string, params?: { page?: number; limit?: number; search?: string }): Promise<any> {
-    const qs = new URLSearchParams();
-    if (params?.page) qs.set('page', String(params.page));
-    if (params?.limit) qs.set('limit', String(params.limit));
-    if (params?.search) qs.set('search', params.search);
-    const query = qs.toString();
-    const res = await fetch(`${API_BASE_URL}/admin/branches${query ? `?${query}` : ''}`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch branches');
-    return res.json();
+export async function getAdminBranches(token: string, params?: { page?: number; limit?: number; search?: string }): Promise<PaginatedResponse<AdminBranch>> {
+    return apiFetch<PaginatedResponse<AdminBranch>>('/admin/branches', {
+        token, params: { page: params?.page, limit: params?.limit, search: params?.search },
+    });
 }
 
-export async function updateBranchStatus(token: string, id: string, status: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/branches/${id}/status`, {
-        method: 'PATCH', headers: authHeaders(token), body: JSON.stringify({ status }),
-    });
-    if (!res.ok) throw new Error('Failed to update branch status');
-    return res.json();
+export async function getAdminBranchById(token: string, id: string): Promise<AdminBranchDetail> {
+    return apiFetch<AdminBranchDetail>(`/admin/branches/${id}`, { token });
+}
+
+export async function updateBranchStatus(token: string, id: string, status: string): Promise<AdminBranch> {
+    return apiFetch<AdminBranch>(`/admin/branches/${id}/status`, { method: 'PATCH', token, body: { status } });
 }
 
 // ==================== APPROVALS ====================
 
-export async function getAdminApprovals(token: string, params?: { page?: number; limit?: number }): Promise<any> {
-    const qs = new URLSearchParams();
-    if (params?.page) qs.set('page', String(params.page));
-    if (params?.limit) qs.set('limit', String(params.limit));
-    const query = qs.toString();
-    const res = await fetch(`${API_BASE_URL}/admin/approvals${query ? `?${query}` : ''}`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch approvals');
-    return res.json();
+export async function getAdminApprovals(token: string, params?: { page?: number; limit?: number }): Promise<PaginatedResponse<AdminApproval>> {
+    return apiFetch<PaginatedResponse<AdminApproval>>('/admin/approvals', {
+        token, params: { page: params?.page, limit: params?.limit },
+    });
 }
 
-export async function processApproval(token: string, id: string, status: string, reason?: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/approvals/${id}`, {
-        method: 'PATCH', headers: authHeaders(token),
-        body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
+export async function processApproval(token: string, id: string, status: string, reason?: string): Promise<AdminApproval> {
+    return apiFetch<AdminApproval>(`/admin/approvals/${id}`, {
+        method: 'PATCH', token, body: { status, ...(reason ? { reason } : {}) },
     });
-    if (!res.ok) throw new Error('Failed to process approval');
-    return res.json();
 }
 
 // ==================== NOTIFICATIONS ====================
 
-export async function getAdminNotifications(token: string): Promise<any[]> {
-    const res = await fetch(`${API_BASE_URL}/admin/notifications`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch notifications');
-    return res.json();
+export async function getAdminNotifications(token: string): Promise<AdminNotification[]> {
+    return apiFetch<AdminNotification[]>('/admin/notifications', { token });
 }
 
 export async function sendNotification(
     token: string, data: { userId?: string; title: string; message: string }
-): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/notifications/send`, {
-        method: 'POST', headers: authHeaders(token), body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Failed to send notification');
-    return res.json();
+): Promise<AdminNotification> {
+    return apiFetch<AdminNotification>('/admin/notifications/send', { method: 'POST', token, body: data });
+}
+
+export async function markAdminNotificationRead(token: string, id: string): Promise<AdminNotification> {
+    return apiFetch<AdminNotification>(`/auth/notifications/${id}/read`, { method: 'PATCH', token });
+}
+
+export async function markAllAdminNotificationsRead(token: string): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>('/auth/notifications/read-all', { method: 'PATCH', token });
 }
 
 // ==================== ANALYTICS ====================
 
-export async function getRevenueAnalytics(token: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/analytics/revenue`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch revenue analytics');
-    return res.json();
+export async function getRevenueAnalytics(token: string): Promise<RevenueAnalytics> {
+    return apiFetch<RevenueAnalytics>('/admin/analytics/revenue', { token });
 }
 
-export async function getBookingAnalytics(token: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/analytics/bookings`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch booking analytics');
-    return res.json();
+export async function getBookingAnalytics(token: string): Promise<BookingAnalytics> {
+    return apiFetch<BookingAnalytics>('/admin/analytics/bookings', { token });
 }
 
-export async function getUserGrowthAnalytics(token: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/analytics/users`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch user analytics');
-    return res.json();
+export async function getUserGrowthAnalytics(token: string): Promise<UserGrowthAnalytics> {
+    return apiFetch<UserGrowthAnalytics>('/admin/analytics/users', { token });
 }
 
 // ==================== SYSTEM SETTINGS ====================
 
-export async function getSystemSettings(token: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/settings`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to fetch system settings');
-    return res.json();
+export async function getSystemSettings(token: string): Promise<SystemSetting[]> {
+    return apiFetch<SystemSetting[]>('/admin/settings', { token });
 }
 
-export async function updateSystemSettings(token: string, settings: { key: string; value: string }[]): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/settings`, {
-        method: 'PATCH',
-        headers: authHeaders(token),
-        body: JSON.stringify({ settings }),
-    });
-    if (!res.ok) throw new Error('Failed to update system settings');
-    return res.json();
+export async function updateSystemSettings(token: string, settings: { key: string; value: string }[]): Promise<SystemSetting[]> {
+    return apiFetch<SystemSetting[]>('/admin/settings', { method: 'PATCH', token, body: { settings } });
 }
 
 // ==================== VENDOR COMMISSIONS ====================
 
-export async function updateVendorCommission(token: string, id: string, commissionRate: number | null): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/admin/vendors/${id}/commission`, {
-        method: 'PATCH',
-        headers: authHeaders(token),
-        body: JSON.stringify({ commissionRate }),
+export async function updateVendorCommission(token: string, id: string, commissionRate: number | null): Promise<AdminVendor> {
+    return apiFetch<AdminVendor>(`/admin/vendors/${id}/commission`, {
+        method: 'PATCH', token, body: { commissionRate },
     });
-    if (!res.ok) throw new Error('Failed to update vendor commission');
-    return res.json();
 }
 
 // ==================== EXPORTS ====================
 
 export async function exportRevenueCSV(token: string): Promise<string> {
-    const res = await fetch(`${API_BASE_URL}/admin/export/revenue`, { headers: authHeaders(token) });
-    if (!res.ok) throw new Error('Failed to export revenue');
-    const data = await res.json();
+    const data = await apiFetch<{ data: string }>('/admin/export/revenue', { token });
     return data.data;
 }
 

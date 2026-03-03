@@ -12,6 +12,7 @@ export function formatServiceType(type: string): string {
     HOT_DESK: 'Hot Desk',
     PRIVATE_OFFICE: 'Private Office',
     MEETING_ROOM: 'Meeting Room',
+    EVENT_SPACE: 'Event Space',
   };
   return map[type] || type;
 }
@@ -42,11 +43,13 @@ export function formatPricingInterval(interval: string): string {
 export function formatBookingStatus(status: string): string {
   const map: Record<string, string> = {
     PENDING: 'Pending',
+    PENDING_APPROVAL: 'Pending Approval',
     CONFIRMED: 'Confirmed',
     CHECKED_IN: 'Checked In',
     COMPLETED: 'Completed',
     NO_SHOW: 'No Show',
     CANCELLED: 'Cancelled',
+    REJECTED: 'Rejected',
   };
   return map[status] || status;
 }
@@ -61,14 +64,64 @@ export function formatPaymentMethod(method: string): string {
   return map[method] || method;
 }
 
+export function formatVendorStatus(status: string): string {
+  const map: Record<string, string> = {
+    DRAFT: 'Draft',
+    PENDING_APPROVAL: 'Pending Approval',
+    APPROVED: 'Approved',
+    REJECTED: 'Rejected',
+    SUSPENDED: 'Suspended',
+  };
+  return map[status] || formatEnumLabel(status);
+}
+
+export function formatPaymentStatus(status: string): string {
+  const map: Record<string, string> = {
+    PENDING: 'Pending',
+    COMPLETED: 'Completed',
+    FAILED: 'Failed',
+    REFUNDED: 'Refunded',
+  };
+  return map[status] || formatEnumLabel(status);
+}
+
+export function formatBranchStatus(status: string): string {
+  const map: Record<string, string> = {
+    ACTIVE: 'Active',
+    UNDER_REVIEW: 'Under Review',
+    SUSPENDED: 'Suspended',
+  };
+  return map[status] || formatEnumLabel(status);
+}
+
+export function formatUserRole(role: string): string {
+  const map: Record<string, string> = {
+    ADMIN: 'Admin',
+    MODERATOR: 'Moderator',
+    ACCOUNTANT: 'Accountant',
+    VENDOR: 'Vendor',
+    CUSTOMER: 'Customer',
+  };
+  return map[role] || formatEnumLabel(role);
+}
+
+export function formatEnumLabel(value: string): string {
+  return value
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 export function bookingStatusColor(status: string): string {
   const map: Record<string, string> = {
     PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+    PENDING_APPROVAL: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
     CONFIRMED: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     CHECKED_IN: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
     COMPLETED: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
     NO_SHOW: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     CANCELLED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    REJECTED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   };
   return map[status] || 'bg-gray-100 text-gray-800';
 }

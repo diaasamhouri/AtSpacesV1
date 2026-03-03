@@ -53,7 +53,7 @@ export default function SignupPage() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             Create your account
           </h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             Start booking your workspace today
           </p>
         </div>
@@ -61,7 +61,7 @@ export default function SignupPage() {
         {/* Google OAuth */}
         <a
           href={`${API_BASE_URL}/auth/google`}
-          className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors dark:border-gray-600 dark:bg-dark-800 dark:text-gray-300"
+          className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm font-bold text-slate-600 dark:text-slate-300 shadow-sm hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
@@ -74,27 +74,27 @@ export default function SignupPage() {
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+            <div className="w-full border-t border-slate-200 dark:border-slate-800" />
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="bg-white px-2 text-gray-500 dark:bg-dark-900 dark:text-gray-400">
+            <span className="bg-dark-950 px-4 text-slate-500 font-medium">
               or sign up with email
             </span>
           </div>
         </div>
 
         {error && (
-          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm font-medium text-red-500 text-center">
             {error}
           </div>
         )}
 
         {/* Signup Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              className="block text-sm font-bold text-gray-900 dark:text-white mb-2"
             >
               Full name
             </label>
@@ -102,14 +102,15 @@ export default function SignupPage() {
               id="name"
               name="name"
               type="text"
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-600 dark:bg-dark-800 dark:text-white"
+              autoComplete="name"
+              className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500"
               placeholder="Ahmad"
             />
           </div>
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              className="block text-sm font-bold text-gray-900 dark:text-white mb-2"
             >
               Email
             </label>
@@ -118,14 +119,16 @@ export default function SignupPage() {
               name="email"
               type="email"
               required
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-600 dark:bg-dark-800 dark:text-white"
+              autoComplete="email"
+              inputMode="email"
+              className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500"
               placeholder="you@example.com"
             />
           </div>
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              className="block text-sm font-bold text-gray-900 dark:text-white mb-2"
             >
               Password
             </label>
@@ -134,24 +137,25 @@ export default function SignupPage() {
               name="password"
               type="password"
               required
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:border-gray-600 dark:bg-dark-800 dark:text-white"
+              autoComplete="new-password"
+              className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500"
               placeholder="Min. 8 characters"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-500/90 transition-colors disabled:opacity-50"
+            className="w-full mt-2 rounded-xl bg-brand-500 active:scale-95 px-4 py-3.5 text-sm font-bold text-white hover:bg-brand-600 shadow-[0_4px_12px_rgba(255,91,4,0.3)] hover:shadow-[0_6px_20px_rgba(255,91,4,0.5)] hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
           >
             {loading ? "Creating account..." : "Create account"}
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-center text-sm text-slate-500 dark:text-slate-400">
           Already have an account?{" "}
           <Link
             href="/auth/login"
-            className="font-medium text-brand-500 hover:text-brand-500/80"
+            className="font-bold text-brand-500 hover:text-brand-400 transition-colors"
           >
             Sign in
           </Link>

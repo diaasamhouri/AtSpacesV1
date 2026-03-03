@@ -3,18 +3,20 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "../../../lib/auth-context";
+import { useToast } from "../../components/ui/toast-provider";
 import { getVendorPromoCodes, createPromoCode, deletePromoCode, getVendorBranches } from "../../../lib/vendor";
 import StatusBadge from "../../components/ui/status-badge";
 import { Pagination } from "../../components/pagination";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
-import type { PaginationMeta } from "../../../lib/types";
+import type { PaginationMeta, PromoCode, VendorBranchDetail } from "../../../lib/types";
 
 export default function PromotionsPage() {
     const { token } = useAuth();
+    const { toast } = useToast();
     const searchParams = useSearchParams();
-    const [promos, setPromos] = useState<any[]>([]);
+    const [promos, setPromos] = useState<PromoCode[]>([]);
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
-    const [branches, setBranches] = useState<any[]>([]);
+    const [branches, setBranches] = useState<VendorBranchDetail[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +40,7 @@ export default function PromotionsPage() {
         Promise.all([
             getVendorPromoCodes(token, { page }),
             getVendorBranches(token)
-        ]).then(([promosData, branchesData]: any) => {
+        ]).then(([promosData, branchesData]) => {
             setPromos(promosData.data || []);
             setMeta(promosData.meta || null);
             setBranches(branchesData.data || branchesData);
@@ -91,25 +93,25 @@ export default function PromotionsPage() {
             await deletePromoCode(token!, deleteTarget);
             setPromos(promos.filter(p => p.id !== deleteTarget));
         } catch (err: any) {
-            alert(err.message);
+            toast(err.message || "Failed to delete promo code.", "error");
         }
         setConfirmOpen(false);
         setDeleteTarget(null);
     };
 
-    const getPromoStatus = (promo: any) => {
+    const getPromoStatus = (promo: PromoCode) => {
         if (promo.validUntil && new Date(promo.validUntil) < new Date()) return "expired";
         if (promo.maxUses > 0 && promo.currentUses >= promo.maxUses) return "expired";
         return "active";
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-400">Loading promotions...</div>;
+    if (loading) return <div className="p-8 text-center text-slate-500 dark:text-slate-400">Loading promotions...</div>;
 
     return (
         <div className="space-y-8">
             <div>
-                <h1 className="text-3xl font-bold text-white mb-2">Promotions & Discounts</h1>
-                <p className="text-slate-400">Create and manage promo codes for your spaces.</p>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Promotions & Discounts</h1>
+                <p className="text-slate-500 dark:text-slate-400">Create and manage promo codes for your spaces.</p>
             </div>
 
             {error && (
@@ -118,22 +120,22 @@ export default function PromotionsPage() {
                 </div>
             )}
 
-            <div className="bg-dark-900 p-6 rounded-2xl shadow-float border border-slate-800">
-                <h2 className="text-lg font-bold text-white mb-4">Create New Promo Code</h2>
+            <div className="bg-dark-900 p-6 rounded-2xl shadow-float border border-slate-200 dark:border-slate-800">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Create New Promo Code</h2>
                 <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Code *</label>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Code *</label>
                         <input
                             type="text"
                             value={code}
                             onChange={e => setCode(e.target.value.toUpperCase())}
                             required
                             placeholder="e.g. SUMMER20"
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 uppercase transition-colors"
+                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 uppercase transition-colors"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Discount % *</label>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Discount % *</label>
                         <input
                             type="number"
                             value={discountPercent}
@@ -142,15 +144,15 @@ export default function PromotionsPage() {
                             min="1"
                             max="100"
                             placeholder="e.g. 15"
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Target Branch</label>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Target Branch</label>
                         <select
                             value={branchId}
                             onChange={e => setBranchId(e.target.value)}
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                         >
                             <option value="">All Branches</option>
                             {branches.map(b => (
@@ -159,23 +161,23 @@ export default function PromotionsPage() {
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Max Uses</label>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Max Uses</label>
                         <input
                             type="number"
                             value={maxUses}
                             onChange={e => setMaxUses(e.target.value)}
                             min="0"
                             placeholder="Leave empty for unlimited"
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Valid Until</label>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Valid Until</label>
                         <input
                             type="datetime-local"
                             value={validUntil}
                             onChange={e => setValidUntil(e.target.value)}
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                         />
                     </div>
                     <div className="flex items-end">
@@ -190,12 +192,12 @@ export default function PromotionsPage() {
                 </form>
             </div>
 
-            <div className="bg-dark-900 rounded-2xl shadow-float border border-slate-800 overflow-hidden">
-                <div className="p-6 border-b border-slate-800">
-                    <h2 className="text-lg font-bold text-white">Active Promo Codes</h2>
+            <div className="bg-dark-900 rounded-2xl shadow-float border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">Active Promo Codes</h2>
                 </div>
                 {promos.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400">
+                    <div className="p-8 text-center text-slate-500 dark:text-slate-400">
                         No promo codes generated yet.
                     </div>
                 ) : (
@@ -203,20 +205,20 @@ export default function PromotionsPage() {
                         <table className="w-full divide-y divide-slate-800">
                             <thead className="bg-dark-850">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Code</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Discount</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Scope</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Uses</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Status</th>
-                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-400">Expires</th>
-                                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-400">Actions</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Code</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Discount</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Scope</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Uses</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Expires</th>
+                                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/50">
                                 {promos.map(promo => (
-                                    <tr key={promo.id} className="even:bg-dark-850/30 hover:bg-dark-850/60 transition-colors">
+                                    <tr key={promo.id} className="even:bg-dark-850/30 hover:bg-gray-50 dark:hover:bg-dark-850/60 transition-colors">
                                         <td className="px-6 py-4">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-bold bg-dark-800 text-white font-mono border border-slate-700">
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-bold bg-dark-800 text-gray-900 dark:text-white font-mono border border-slate-200 dark:border-slate-700">
                                                 {promo.code}
                                             </span>
                                         </td>
@@ -224,12 +226,12 @@ export default function PromotionsPage() {
                                             <span className="text-emerald-400 font-bold">{promo.discountPercent}% OFF</span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="text-slate-400 font-medium text-sm">
+                                            <span className="text-slate-500 dark:text-slate-400 font-medium text-sm">
                                                 {promo.branch ? promo.branch.name : "All Branches"}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="text-slate-400 text-sm font-medium">
+                                            <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">
                                                 {promo.currentUses} / {promo.maxUses > 0 ? promo.maxUses : '\u221e'}
                                             </span>
                                         </td>
@@ -237,7 +239,7 @@ export default function PromotionsPage() {
                                             <StatusBadge status={getPromoStatus(promo)} />
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="text-slate-400 text-sm font-medium">
+                                            <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">
                                                 {promo.validUntil ? new Date(promo.validUntil).toLocaleDateString() : 'Never'}
                                             </span>
                                         </td>

@@ -55,20 +55,26 @@ export default function AdminAnalyticsPage() {
 
     return (
         <div className="space-y-8">
-            <h1 className="text-3xl font-bold text-white">Analytics</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Analytics</h1>
 
             {/* Summary Cards — fixed light mode */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
-                    label="Total Revenue"
-                    value={`JOD ${(revenue?.totalRevenue || 0).toFixed(2)}`}
+                    label="Gross Collected"
+                    value={`JOD ${(revenue?.totalGross || revenue?.totalRevenue || 0).toFixed(2)}`}
+                    color="blue"
+                    icon={<SidebarIcon name="DollarSign" className="h-6 w-6" />}
+                />
+                <StatCard
+                    label="Platform Revenue"
+                    value={`JOD ${(revenue?.totalCommission || 0).toFixed(2)}`}
                     color="emerald"
                     icon={<SidebarIcon name="DollarSign" className="h-6 w-6" />}
                 />
                 <StatCard
                     label="Total Bookings"
                     value={bookings?.total || 0}
-                    color="blue"
+                    color="indigo"
                     icon={<SidebarIcon name="Calendar" className="h-6 w-6" />}
                 />
                 <StatCard
@@ -80,11 +86,11 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {/* Revenue Chart */}
-            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-800">
-                <h2 className="text-xl font-bold text-white mb-6">Monthly Revenue</h2>
+            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Monthly Platform Revenue (Commission)</h2>
                 {revenue?.monthly?.length > 0 ? (
                     <BarChart
-                        data={revenue.monthly.map((m: any) => ({ label: m.month, value: m.total }))}
+                        data={revenue.monthly.map((m: any) => ({ label: m.month, value: m.commission || m.total }))}
                         colors={["#10b981", "#34d399"]}
                         id="admin-revenue"
                     />
@@ -95,8 +101,8 @@ export default function AdminAnalyticsPage() {
 
             {/* Booking Status + User Distribution as Donuts */}
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-800">
-                    <h2 className="text-xl font-bold text-white mb-6">Booking Status Breakdown</h2>
+                <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Booking Status Breakdown</h2>
                     {bookings?.byStatus?.length > 0 ? (
                         <DonutChart
                             data={bookings.byStatus.map((s: any) => ({
@@ -112,8 +118,8 @@ export default function AdminAnalyticsPage() {
                     )}
                 </div>
 
-                <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-800">
-                    <h2 className="text-xl font-bold text-white mb-6">User Distribution by Role</h2>
+                <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">User Distribution by Role</h2>
                     {userGrowth?.byRole?.length > 0 ? (
                         <DonutChart
                             data={userGrowth.byRole.map((r: any) => ({
@@ -131,8 +137,8 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {/* Daily Bookings */}
-            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-800">
-                <h2 className="text-xl font-bold text-white mb-6">Daily Bookings (Last 30)</h2>
+            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Daily Bookings (Last 30)</h2>
                 {bookings?.daily?.length > 0 ? (
                     <BarChart
                         data={bookings.daily.map((d: any) => ({ label: d.date.slice(5), value: d.count }))}
@@ -145,8 +151,8 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {/* User Growth Chart */}
-            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-800">
-                <h2 className="text-xl font-bold text-white mb-6">Monthly User Growth</h2>
+            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Monthly User Growth</h2>
                 {userGrowth?.monthly?.length > 0 ? (
                     <BarChart
                         data={userGrowth.monthly.map((m: any) => ({ label: m.month, value: m.count }))}

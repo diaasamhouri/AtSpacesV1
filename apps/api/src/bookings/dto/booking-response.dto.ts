@@ -67,6 +67,22 @@ export class BookingListResponseDto {
   data: BookingResponseDto[];
 }
 
+class OperatingHoursDto {
+  @ApiProperty()
+  open: string;
+  @ApiProperty()
+  close: string;
+}
+
+class SuggestedSlotDto {
+  @ApiProperty()
+  startTime: string;
+  @ApiProperty()
+  endTime: string;
+  @ApiProperty()
+  label: string;
+}
+
 export class AvailabilityResponseDto {
   @ApiProperty()
   available: boolean;
@@ -74,4 +90,12 @@ export class AvailabilityResponseDto {
   currentBookings: number;
   @ApiProperty()
   capacity: number;
+  @ApiProperty()
+  remainingSpots: number;
+  @ApiPropertyOptional()
+  reason?: string;
+  @ApiPropertyOptional({ type: OperatingHoursDto, nullable: true })
+  operatingHoursForDay?: { open: string; close: string } | null;
+  @ApiPropertyOptional({ type: [SuggestedSlotDto] })
+  suggestedSlots?: { startTime: string; endTime: string; label: string }[];
 }

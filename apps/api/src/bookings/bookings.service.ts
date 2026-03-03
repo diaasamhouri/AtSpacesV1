@@ -30,7 +30,7 @@ export class BookingsService {
       where: { id: dto.serviceId },
       include: {
         pricing: { where: { isActive: true } },
-        branch: { select: { id: true, status: true, vendorProfileId: true, autoAcceptBookings: true } },
+        branch: { select: { id: true, status: true, vendorProfileId: true, autoAcceptBookings: true, operatingHours: true } },
       },
     });
 
@@ -56,6 +56,31 @@ export class BookingsService {
       throw new BadRequestException(
         `Requested ${dto.numberOfPeople} people but service capacity is ${service.capacity}`,
       );
+    }
+
+    // Validate operating hours (times compared in UTC)
+    const operatingHours = service.branch.operatingHours as Record<string, { open: string; close: string } | null> | null;
+    if (operatingHours) {
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const dayName = days[startTime.getUTCDay()]!;
+      const dayHours = operatingHours[dayName];
+
+      if (!dayHours || !dayHours.open || !dayHours.close) {
+        throw new BadRequestException('Branch is closed on this day');
+      }
+
+      const [openH, openM] = dayHours.open.split(':').map(Number) as [number, number];
+      const [closeH, closeM] = dayHours.close.split(':').map(Number) as [number, number];
+      const bookingStartMinutes = startTime.getUTCHours() * 60 + startTime.getUTCMinutes();
+      const bookingEndMinutes = endTime.getUTCHours() * 60 + endTime.getUTCMinutes();
+      const openMinutes = openH * 60 + openM;
+      const closeMinutes = closeH * 60 + closeM;
+
+      if (bookingStartMinutes < openMinutes || bookingEndMinutes > closeMinutes) {
+        throw new BadRequestException(
+          `Booking time is outside operating hours (open: ${dayHours.open}, close: ${dayHours.close})`,
+        );
+      }
     }
 
     // Acquire Redis lock to prevent double-booking
@@ -160,6 +185,35 @@ export class BookingsService {
         });
       }
 
+      // Notify vendor and customer
+      const branchInfo = await this.prisma.branch.findUnique({
+        where: { id: service.branch.id },
+        select: { name: true, vendor: { select: { userId: true } } },
+      });
+      if (branchInfo) {
+        const isAutoAccepted = bookingStatus === 'CONFIRMED';
+        await this.prisma.notification.createMany({
+          data: [
+            {
+              userId: branchInfo.vendor.userId,
+              type: isAutoAccepted ? 'BOOKING_CONFIRMED' : 'GENERAL',
+              title: isAutoAccepted ? 'New Booking Confirmed' : 'New Booking Awaiting Approval',
+              message: isAutoAccepted
+                ? `A new booking at ${branchInfo.name} has been auto-confirmed.`
+                : `A new booking at ${branchInfo.name} is awaiting your approval.`,
+            },
+            {
+              userId,
+              type: isAutoAccepted ? 'BOOKING_CONFIRMED' : 'GENERAL',
+              title: isAutoAccepted ? 'Booking Confirmed' : 'Booking Submitted',
+              message: isAutoAccepted
+                ? `Your booking at ${branchInfo.name} has been confirmed.`
+                : `Your booking at ${branchInfo.name} has been submitted and is awaiting approval.`,
+            },
+          ],
+        });
+      }
+
       return this.serializeBooking(booking);
     } finally {
       await this.redis.releaseLock(lockKey);
@@ -224,7 +278,7 @@ export class BookingsService {
     return { data: bookings.map((b) => this.serializeBooking(b)) };
   }
 
-  async getVendorBookings(userId: string, query: { page?: number; limit?: number; search?: string } = {}) {
+  async getVendorBookings(userId: string, query: { page?: number; limit?: number; search?: string; status?: string } = {}) {
     const vendorProfile = await this.prisma.vendorProfile.findUnique({
       where: { userId },
     });
@@ -237,6 +291,9 @@ export class BookingsService {
     const skip = (page - 1) * limit;
 
     const where: any = { branch: { vendorProfileId: vendorProfile.id } };
+    if (query.status) {
+      where.status = query.status;
+    }
     if (query.search) {
       where.user = { name: { contains: query.search, mode: 'insensitive' } };
     }
@@ -302,6 +359,20 @@ export class BookingsService {
       }
     });
 
+    // Notify customer about status change
+    const notifType = status === 'CONFIRMED' ? 'BOOKING_CONFIRMED'
+      : status === 'REJECTED' ? 'BOOKING_CANCELLED'
+      : 'GENERAL';
+    const statusLabel = String(status).replace(/_/g, ' ').toLowerCase();
+    await this.prisma.notification.create({
+      data: {
+        userId: booking.userId,
+        type: notifType,
+        title: `Booking ${status === 'CONFIRMED' ? 'Confirmed' : status === 'REJECTED' ? 'Rejected' : statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1)}`,
+        message: `Your booking at ${updated.branch.name} has been ${statusLabel}.`,
+      },
+    });
+
     return this.serializeBooking(updated);
   }
 
@@ -332,7 +403,7 @@ export class BookingsService {
       throw new NotFoundException('Booking not found');
     }
 
-    if (!['PENDING', 'CONFIRMED'].includes(booking.status)) {
+    if (!['PENDING', 'PENDING_APPROVAL', 'CONFIRMED'].includes(booking.status)) {
       throw new BadRequestException(
         `Cannot cancel a booking with status: ${booking.status}`,
       );
@@ -354,6 +425,22 @@ export class BookingsService {
       },
     });
 
+    // Notify vendor about cancellation
+    const cancelBranch = await this.prisma.branch.findUnique({
+      where: { id: booking.branchId },
+      select: { name: true, vendor: { select: { userId: true } } },
+    });
+    if (cancelBranch) {
+      await this.prisma.notification.create({
+        data: {
+          userId: cancelBranch.vendor.userId,
+          type: 'BOOKING_CANCELLED',
+          title: 'Booking Cancelled',
+          message: `A customer has cancelled their booking at ${cancelBranch.name}.`,
+        },
+      });
+    }
+
     return this.serializeBooking(updated);
   }
 
@@ -361,19 +448,81 @@ export class BookingsService {
     serviceId: string,
     startTime: string,
     endTime: string,
+    numberOfPeople?: number,
   ) {
     const start = new Date(startTime);
     const end = new Date(endTime);
+    const requestedPeople = numberOfPeople ?? 1;
 
     const service = await this.prisma.service.findUnique({
       where: { id: serviceId },
-      select: { capacity: true, isActive: true },
+      include: {
+        branch: { select: { status: true, operatingHours: true } },
+      },
     });
 
     if (!service || !service.isActive) {
       throw new NotFoundException('Service not found or inactive');
     }
 
+    const capacity = service.capacity;
+
+    // Check branch status
+    if (service.branch.status !== 'ACTIVE') {
+      return {
+        available: false,
+        currentBookings: 0,
+        capacity,
+        remainingSpots: 0,
+        reason: 'Branch is not currently active',
+      };
+    }
+
+    // Check operating hours
+    const operatingHours = service.branch.operatingHours as Record<string, { open: string; close: string } | null> | null;
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayName = days[start.getUTCDay()]!;
+    let operatingHoursForDay: { open: string; close: string } | null = null;
+
+    if (operatingHours) {
+      const dayHours = operatingHours[dayName];
+      operatingHoursForDay = dayHours ?? null;
+
+      if (!dayHours || !dayHours.open || !dayHours.close) {
+        const suggestions = await this.findSuggestedSlots(serviceId, capacity, start, end, operatingHours);
+        return {
+          available: false,
+          currentBookings: 0,
+          capacity,
+          remainingSpots: 0,
+          reason: 'Branch is closed on this day',
+          operatingHoursForDay: null,
+          suggestedSlots: suggestions,
+        };
+      }
+
+      const [openH, openM] = dayHours.open.split(':').map(Number) as [number, number];
+      const [closeH, closeM] = dayHours.close.split(':').map(Number) as [number, number];
+      const bookingStartMinutes = start.getUTCHours() * 60 + start.getUTCMinutes();
+      const bookingEndMinutes = end.getUTCHours() * 60 + end.getUTCMinutes();
+      const openMinutes = openH * 60 + openM;
+      const closeMinutes = closeH * 60 + closeM;
+
+      if (bookingStartMinutes < openMinutes || bookingEndMinutes > closeMinutes) {
+        const suggestions = await this.findSuggestedSlots(serviceId, capacity, start, end, operatingHours);
+        return {
+          available: false,
+          currentBookings: 0,
+          capacity,
+          remainingSpots: 0,
+          reason: `Booking time is outside operating hours (open: ${dayHours.open}, close: ${dayHours.close})`,
+          operatingHoursForDay,
+          suggestedSlots: suggestions,
+        };
+      }
+    }
+
+    // Count overlapping active bookings
     const currentBookings = await this.prisma.booking.count({
       where: {
         serviceId,
@@ -383,11 +532,93 @@ export class BookingsService {
       },
     });
 
+    const remainingSpots = capacity - currentBookings;
+    const available = remainingSpots >= requestedPeople;
+
+    if (!available) {
+      const suggestions = await this.findSuggestedSlots(serviceId, capacity, start, end, operatingHours);
+      return {
+        available: false,
+        currentBookings,
+        capacity,
+        remainingSpots: Math.max(0, remainingSpots),
+        reason: remainingSpots <= 0
+          ? `Fully booked (${currentBookings}/${capacity})`
+          : `Not enough capacity for ${requestedPeople} people (${remainingSpots} spots remaining)`,
+        operatingHoursForDay,
+        suggestedSlots: suggestions,
+      };
+    }
+
     return {
-      available: currentBookings < service.capacity,
+      available: true,
       currentBookings,
-      capacity: service.capacity,
+      capacity,
+      remainingSpots,
+      operatingHoursForDay,
     };
+  }
+
+  private async findSuggestedSlots(
+    serviceId: string,
+    capacity: number,
+    originalStart: Date,
+    originalEnd: Date,
+    operatingHours: Record<string, { open: string; close: string } | null> | null,
+  ): Promise<{ startTime: string; endTime: string; label: string }[]> {
+    const suggestions: { startTime: string; endTime: string; label: string }[] = [];
+    const durationMs = originalEnd.getTime() - originalStart.getTime();
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const now = new Date();
+
+    for (let dayOffset = 0; dayOffset <= 7 && suggestions.length < 3; dayOffset++) {
+      const candidateDate = new Date(originalStart);
+      candidateDate.setUTCDate(candidateDate.getUTCDate() + dayOffset);
+
+      const dayName = days[candidateDate.getUTCDay()]!;
+      const dayHours = operatingHours?.[dayName];
+      if (!dayHours || !dayHours.open || !dayHours.close) continue;
+
+      const [openH, openM] = dayHours.open.split(':').map(Number) as [number, number];
+      const [closeH, closeM] = dayHours.close.split(':').map(Number) as [number, number];
+      const openMinutes = openH * 60 + openM;
+      const closeMinutes = closeH * 60 + closeM;
+
+      // Scan hourly slots within operating hours
+      for (let minutes = openMinutes; minutes + (durationMs / 60000) <= closeMinutes && suggestions.length < 3; minutes += 60) {
+        const slotStart = new Date(candidateDate);
+        slotStart.setUTCHours(0, 0, 0, 0);
+        slotStart.setUTCMinutes(minutes);
+        const slotEnd = new Date(slotStart.getTime() + durationMs);
+
+        // Skip past slots
+        if (slotStart <= now) continue;
+
+        // Skip the originally-requested slot
+        if (slotStart.getTime() === originalStart.getTime()) continue;
+
+        const overlapping = await this.prisma.booking.count({
+          where: {
+            serviceId,
+            status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
+            startTime: { lt: slotEnd },
+            endTime: { gt: slotStart },
+          },
+        });
+
+        if (overlapping < capacity) {
+          const dayLabel = dayOffset === 0 ? 'Today' : dayOffset === 1 ? 'Tomorrow' : slotStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          const timeLabel = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+          suggestions.push({
+            startTime: slotStart.toISOString(),
+            endTime: slotEnd.toISOString(),
+            label: `${dayLabel} at ${timeLabel}`,
+          });
+        }
+      }
+    }
+
+    return suggestions;
   }
 
   private serializeBooking(booking: any) {

@@ -1,9 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { API_BASE_URL } from "./api";
 
 export interface AuthUser {
   id: string;
@@ -11,7 +9,12 @@ export interface AuthUser {
   phone: string | null;
   name: string | null;
   image: string | null;
-  role: "ADMIN" | "VENDOR" | "CUSTOMER";
+  role: "ADMIN" | "MODERATOR" | "ACCOUNTANT" | "VENDOR" | "CUSTOMER";
+  vendorProfile?: {
+    id: string;
+    companyName: string;
+    status: string;
+  } | null;
 }
 
 interface AuthContextValue {
@@ -26,8 +29,8 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   token: null,
   isLoading: true,
-  login: async () => {},
-  logout: () => {},
+  login: async () => { },
+  logout: () => { },
 });
 
 export function useAuth() {

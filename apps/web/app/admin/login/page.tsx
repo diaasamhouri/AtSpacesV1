@@ -33,7 +33,7 @@ export default function AdminLogin() {
       }
 
       const data = await res.json();
-      await login(data.access_token);
+      await login(data.accessToken);
       router.push("/admin");
     } catch (err: any) {
       setError(err.message || "Invalid credentials");
@@ -46,7 +46,7 @@ export default function AdminLogin() {
     <div className="min-h-screen flex items-center justify-center bg-dark-950 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-white">
+          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
             Workspace Administration
           </h2>
           <p className="mt-2 text-center text-sm text-slate-500">
@@ -73,7 +73,7 @@ export default function AdminLogin() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="relative block w-full rounded-t-md border-0 bg-dark-850 py-3 text-white ring-1 ring-inset ring-slate-700 placeholder:text-slate-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-brand-500 sm:text-sm sm:leading-6"
+                className="relative block w-full rounded-t-md border-0 bg-dark-850 py-3 text-gray-900 dark:text-white ring-1 ring-inset ring-slate-200 dark:ring-slate-700 placeholder:text-slate-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-brand-500 sm:text-sm sm:leading-6"
                 placeholder="Admin Email"
               />
             </div>
@@ -88,7 +88,7 @@ export default function AdminLogin() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="relative block w-full rounded-b-md border-0 bg-dark-850 py-3 text-white ring-1 ring-inset ring-slate-700 placeholder:text-slate-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-brand-500 sm:text-sm sm:leading-6"
+                className="relative block w-full rounded-b-md border-0 bg-dark-850 py-3 text-gray-900 dark:text-white ring-1 ring-inset ring-slate-200 dark:ring-slate-700 placeholder:text-slate-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-brand-500 sm:text-sm sm:leading-6"
                 placeholder="Password"
               />
             </div>

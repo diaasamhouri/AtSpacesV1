@@ -20,17 +20,28 @@ export class VendorService {
         return vp;
     }
 
+    private async getGlobalCommissionRate(): Promise<number> {
+        const setting = await this.prisma.systemSettings.findUnique({ where: { key: 'DEFAULT_COMMISSION_RATE' } });
+        return setting ? parseFloat(setting.value) : 10;
+    }
+
     // ==================== DASHBOARD ====================
 
     async getVendorStats(userId: string) {
         const vp = await this.getApprovedVendorProfile(userId);
 
-        const [branchesCount, servicesCount, activeBookingsCount, revenueQuery] = await Promise.all([
+        const [branchesCount, servicesCount, activeBookingsCount, revenueQuery, globalRate] = await Promise.all([
             this.prisma.branch.count({ where: { vendorProfileId: vp.id, status: { not: 'SUSPENDED' } } }),
             this.prisma.service.count({ where: { branch: { vendorProfileId: vp.id }, isActive: true } }),
             this.prisma.booking.count({ where: { branch: { vendorProfileId: vp.id }, status: { in: ['CONFIRMED', 'CHECKED_IN'] } } }),
             this.prisma.payment.aggregate({ _sum: { amount: true }, where: { status: 'COMPLETED', booking: { branch: { vendorProfileId: vp.id } } } }),
+            this.getGlobalCommissionRate(),
         ]);
+
+        const grossRevenue = revenueQuery._sum.amount ? revenueQuery._sum.amount.toNumber() : 0;
+        const commissionRate = vp.commissionRate ?? globalRate;
+        const commissionAmount = (grossRevenue * commissionRate) / 100;
+        const netRevenue = grossRevenue - commissionAmount;
 
         return {
             companyName: vp.companyName,
@@ -39,7 +50,11 @@ export class VendorService {
                 branches: branchesCount,
                 services: servicesCount,
                 activeBookings: activeBookingsCount,
-                totalRevenue: revenueQuery._sum.amount ? revenueQuery._sum.amount.toNumber() : 0,
+                totalRevenue: grossRevenue,
+                grossRevenue,
+                commissionRate,
+                commissionAmount,
+                netRevenue,
             },
         };
     }
@@ -66,6 +81,10 @@ export class VendorService {
 
     async updateProfile(userId: string, data: { companyName?: string; description?: string; phone?: string; website?: string; images?: string[]; socialLinks?: Record<string, string> }) {
         const vp = await this.getVendorProfile(userId);
+
+        if (vp.status === 'REJECTED') {
+            throw new ForbiddenException('Cannot update a rejected vendor profile.');
+        }
 
         return this.prisma.vendorProfile.update({
             where: { id: vp.id },
@@ -105,22 +124,36 @@ export class VendorService {
     async getEarnings(userId: string) {
         const vp = await this.getApprovedVendorProfile(userId);
 
-        const payments = await this.prisma.payment.findMany({
-            where: { status: 'COMPLETED', booking: { branch: { vendorProfileId: vp.id } } },
-            orderBy: { createdAt: 'desc' },
-            include: {
-                booking: { include: { branch: { select: { name: true } }, service: { select: { name: true, type: true } }, user: { select: { name: true } } } },
-            },
-        });
+        const [payments, globalRate] = await Promise.all([
+            this.prisma.payment.findMany({
+                where: { status: 'COMPLETED', booking: { branch: { vendorProfileId: vp.id } } },
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    booking: { include: { branch: { select: { name: true } }, service: { select: { name: true, type: true } }, user: { select: { name: true } } } },
+                },
+            }),
+            this.getGlobalCommissionRate(),
+        ]);
 
-        const byMonth: Record<string, number> = {};
+        const commissionRate = vp.commissionRate ?? globalRate;
+        const byMonth: Record<string, { gross: number; commission: number; net: number }> = {};
         const paymentList = payments.map(p => {
+            const gross = p.amount.toNumber();
+            const commission = (gross * commissionRate) / 100;
+            const net = gross - commission;
             const date = p.paidAt || p.createdAt;
             const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            byMonth[key] = (byMonth[key] || 0) + p.amount.toNumber();
+            const entry = byMonth[key] || { gross: 0, commission: 0, net: 0 };
+            entry.gross += gross;
+            entry.commission += commission;
+            entry.net += net;
+            byMonth[key] = entry;
             return {
                 id: p.id,
-                amount: p.amount.toNumber(),
+                amount: gross,
+                grossAmount: gross,
+                commissionAmount: commission,
+                netAmount: net,
                 currency: p.currency,
                 method: p.method,
                 status: p.status,
@@ -133,10 +166,18 @@ export class VendorService {
             };
         });
 
+        const totalGross = paymentList.reduce((sum, p) => sum + p.grossAmount, 0);
+        const totalCommission = paymentList.reduce((sum, p) => sum + p.commissionAmount, 0);
+        const totalNet = paymentList.reduce((sum, p) => sum + p.netAmount, 0);
+
         return {
             payments: paymentList,
-            monthly: Object.entries(byMonth).map(([month, total]) => ({ month, total })),
-            totalEarnings: paymentList.reduce((sum, p) => sum + p.amount, 0),
+            monthly: Object.entries(byMonth).map(([month, v]) => ({ month, total: v.gross, gross: v.gross, commission: v.commission, net: v.net })),
+            totalEarnings: totalGross,
+            commissionRate,
+            totalGross,
+            totalCommission,
+            totalNet,
         };
     }
 
@@ -191,12 +232,23 @@ export class VendorService {
 
     // ==================== NOTIFICATIONS ====================
 
-    async getNotifications(userId: string) {
-        return this.prisma.notification.findMany({
-            where: { userId },
-            orderBy: { createdAt: 'desc' },
-            take: 50,
-        });
+    async getNotifications(userId: string, query: { page?: number; limit?: number } = {}) {
+        const page = query.page || 1;
+        const limit = query.limit || 20;
+        const skip = (page - 1) * limit;
+
+        const where = { userId };
+        const [notifications, total] = await Promise.all([
+            this.prisma.notification.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limit,
+            }),
+            this.prisma.notification.count({ where }),
+        ]);
+
+        return buildPaginatedResponse(notifications, total, page, limit);
     }
 
     async markNotificationRead(userId: string, notificationId: string) {
@@ -212,6 +264,30 @@ export class VendorService {
     }
 
     // ==================== REVIEWS ====================
+
+    async getVendorReviews(userId: string) {
+        const vp = await this.getApprovedVendorProfile(userId);
+
+        const reviews = await this.prisma.review.findMany({
+            where: { branch: { vendorProfileId: vp.id } },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                user: { select: { name: true, image: true } },
+                branch: { select: { name: true } },
+            },
+        });
+
+        return reviews.map(r => ({
+            id: r.id,
+            rating: r.rating,
+            comment: r.comment,
+            vendorReply: r.vendorReply,
+            replyCreatedAt: r.replyCreatedAt,
+            createdAt: r.createdAt,
+            branchName: r.branch.name,
+            user: r.user,
+        }));
+    }
 
     async replyToReview(userId: string, reviewId: string, vendorReply: string) {
         const vp = await this.getApprovedVendorProfile(userId);

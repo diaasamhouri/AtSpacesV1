@@ -1,4 +1,9 @@
-export { CreateBookingDto, PricingIntervalParam, PaymentMethodParam } from './create-booking.dto';
+export {
+  CreateBookingDto,
+  CheckAvailabilityQueryDto,
+  PricingIntervalParam,
+  PaymentMethodParam,
+} from './create-booking.dto';
 export {
   BookingResponseDto,
   BookingListResponseDto,

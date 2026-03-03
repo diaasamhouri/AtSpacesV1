@@ -110,7 +110,7 @@ export default function NewBranchPage() {
 
     return (
         <div className="max-w-2xl mx-auto space-y-6">
-            <h1 className="text-2xl font-bold text-white">Add New Branch</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Add New Branch</h1>
 
             <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3">
                 <span className="text-xl mt-0.5">⏳</span>
@@ -127,47 +127,47 @@ export default function NewBranchPage() {
                     {/* Basic Info */}
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                         <div className="sm:col-span-2">
-                            <label className="block text-sm font-semibold text-white mb-1">Branch Name *</label>
+                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Branch Name *</label>
                             <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-white mb-1">City *</label>
+                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">City *</label>
                             <select value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value as City })}
-                                className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500">
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500">
                                 {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-white mb-1">Address *</label>
+                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Address *</label>
                             <input type="text" required value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                         <div className="sm:col-span-2">
-                            <label className="block text-sm font-semibold text-white mb-1">Description</label>
+                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Description</label>
                             <textarea rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-white mb-1">Phone</label>
+                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Phone</label>
                             <input type="text" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-white mb-1">Email</label>
+                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Email</label>
                             <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                     </div>
 
                     {/* Google Maps URL → auto-extracts coords */}
                     <div>
-                        <label className="block text-sm font-semibold text-white mb-1">
+                        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">
                             Google Maps Link <span className="text-xs text-slate-500 font-normal">(paste link → map appears automatically)</span>
                         </label>
                         <input type="url" placeholder="https://maps.google.com/..." value={formData.googleMapsUrl}
                             onChange={(e) => handleGoogleMapsChange(e.target.value)}
-                            className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         {coords && (
                             <div className="mt-3">
                                 <MapDisplay lat={coords.lat} lng={coords.lng} name={formData.name || "Branch Location"} height="250px" />
@@ -181,13 +181,13 @@ export default function NewBranchPage() {
 
                     {/* Amenities */}
                     <div>
-                        <label className="block text-sm font-semibold text-white mb-2">Amenities & Facilities</label>
+                        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Amenities & Facilities</label>
                         <div className="flex flex-wrap gap-2 mb-3">
                             {COMMON_AMENITIES.map((a) => {
                                 const active = amenities.includes(a);
                                 return (
                                     <button key={a} type="button" onClick={() => toggleAmenity(a)}
-                                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-brand-500 text-white" : "bg-dark-800 text-slate-400 hover:bg-dark-800"}`}>
+                                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-brand-500 text-white" : "bg-dark-800 text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-dark-800"}`}>
                                         {active && "✓ "}{a}
                                     </button>
                                 );
@@ -206,25 +206,25 @@ export default function NewBranchPage() {
                             <input type="text" value={amenityInput} onChange={(e) => setAmenityInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomAmenity(); } }}
                                 placeholder="Add custom amenity..."
-                                className="flex-1 rounded-xl border border-slate-700 px-4 py-2 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500" />
-                            <button type="button" onClick={addCustomAmenity} className="rounded-xl bg-dark-800 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-dark-800">Add</button>
+                                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500" />
+                            <button type="button" onClick={addCustomAmenity} className="rounded-xl bg-dark-800 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-dark-800">Add</button>
                         </div>
                     </div>
 
                     {/* Operating Hours */}
                     <div>
-                        <label className="block text-sm font-semibold text-white mb-3">Operating Hours</label>
+                        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">Operating Hours</label>
                         <div className="space-y-2">
                             {DAYS.map((day) => (
                                 <div key={day} className="flex items-center gap-3 rounded-lg bg-dark-850 px-4 py-2">
-                                    <span className="w-24 text-sm font-medium text-slate-300 capitalize">{day}</span>
-                                    <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+                                    <span className="w-24 text-sm font-medium text-slate-600 dark:text-slate-300 capitalize">{day}</span>
+                                    <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 cursor-pointer">
                                         <input type="checkbox" checked={!(operatingHours[day] || { closed: false }).closed}
                                             onChange={(e) => {
                                                 const prev = operatingHours[day] || { open: "09:00", close: "18:00", closed: false };
                                                 setOperatingHours({ ...operatingHours, [day]: { ...prev, closed: !e.target.checked } });
                                             }}
-                                            className="rounded border-slate-700 text-brand-500 focus:ring-brand-500" />
+                                            className="rounded border-slate-200 dark:border-slate-700 text-brand-500 focus:ring-brand-500" />
                                         Open
                                     </label>
                                     {!(operatingHours[day] || { closed: false }).closed ? (
@@ -234,14 +234,14 @@ export default function NewBranchPage() {
                                                     const prev = operatingHours[day] || { open: "09:00", close: "18:00", closed: false };
                                                     setOperatingHours({ ...operatingHours, [day]: { ...prev, open: e.target.value } });
                                                 }}
-                                                className="rounded-lg border border-slate-700 px-2 py-1 text-xs" />
+                                                className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs" />
                                             <span className="text-xs text-slate-500">to</span>
                                             <input type="time" value={(operatingHours[day] || { close: "18:00" }).close}
                                                 onChange={(e) => {
                                                     const prev = operatingHours[day] || { open: "09:00", close: "18:00", closed: false };
                                                     setOperatingHours({ ...operatingHours, [day]: { ...prev, close: e.target.value } });
                                                 }}
-                                                className="rounded-lg border border-slate-700 px-2 py-1 text-xs" />
+                                                className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs" />
                                         </div>
                                     ) : (
                                         <span className="ml-auto text-xs text-slate-500">Closed</span>
@@ -251,8 +251,8 @@ export default function NewBranchPage() {
                         </div>
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                        <button type="button" onClick={() => router.back()} className="rounded-xl px-5 py-2.5 text-sm font-medium text-slate-300 bg-dark-800 hover:bg-dark-800">Cancel</button>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <button type="button" onClick={() => router.back()} className="rounded-xl px-5 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-dark-800 hover:bg-gray-100 dark:hover:bg-dark-800">Cancel</button>
                         <button type="submit" disabled={loading}
                             className="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50">
                             {loading ? "Submitting..." : "Submit for Review"}

@@ -74,7 +74,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
         <div>
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h2 className="text-3xl font-extrabold text-white tracking-tight">Reviews</h2>
+                    <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Reviews</h2>
                     {totalReviews > 0 && (
                         <div className="mt-1 flex items-center gap-2">
                             <div className="flex items-center gap-0.5">
@@ -85,8 +85,8 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
                                     </svg>
                                 ))}
                             </div>
-                            <span className="text-lg font-bold text-white">{avgRating}</span>
-                            <span className="text-sm text-slate-400">({totalReviews} {totalReviews === 1 ? 'review' : 'reviews'})</span>
+                            <span className="text-lg font-bold text-gray-900 dark:text-white">{avgRating}</span>
+                            <span className="text-sm text-slate-500 dark:text-slate-400">({totalReviews} {totalReviews === 1 ? 'review' : 'reviews'})</span>
                         </div>
                     )}
                 </div>
@@ -100,10 +100,10 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
 
             {/* Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} className="mb-8 rounded-2xl border border-slate-800 bg-dark-850 p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="mb-8 rounded-2xl border border-slate-200 dark:border-slate-800 bg-dark-850 p-6 space-y-4">
                     {error && <div className="rounded-xl bg-red-500/10 p-3 text-sm text-red-400 border border-red-500/20">{error}</div>}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">Rating</label>
+                        <label className="block text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Rating</label>
                         <div className="flex gap-1">
                             {[1, 2, 3, 4, 5].map((s) => (
                                 <button key={s} type="button" onClick={() => setRating(s)}
@@ -117,10 +117,10 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-1">Comment (optional)</label>
+                        <label className="block text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">Comment (optional)</label>
                         <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)}
                             placeholder="Share your experience..."
-                            className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm bg-dark-900 text-white focus:border-brand-500 focus:ring-brand-500" />
+                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-900 text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500" />
                     </div>
                     <div className="flex gap-2">
                         <button type="submit" disabled={submitting}
@@ -128,7 +128,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
                             {submitting ? "Submitting..." : "Submit Review"}
                         </button>
                         <button type="button" onClick={() => setShowForm(false)}
-                            className="rounded-xl bg-dark-800 px-6 py-2.5 text-sm font-semibold text-slate-300 hover:bg-dark-700 transition-colors">
+                            className="rounded-xl bg-dark-800 px-6 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-dark-700 transition-colors">
                             Cancel
                         </button>
                     </div>
@@ -141,14 +141,14 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
             ) : (
                 <div className="space-y-4">
                     {reviews.map((review: any) => (
-                        <div key={review.id} className="rounded-2xl border border-slate-800 bg-dark-900 p-5">
+                        <div key={review.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-dark-900 p-5">
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500/10 text-brand-500 font-bold text-sm">
                                         {review.user?.name?.[0]?.toUpperCase() || "?"}
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-white">{review.user?.name || "Anonymous"}</p>
+                                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{review.user?.name || "Anonymous"}</p>
                                         <div className="flex items-center gap-1">
                                             {[1, 2, 3, 4, 5].map((s) => (
                                                 <svg key={s} className={`h-3.5 w-3.5 ${s <= review.rating ? 'text-amber-400' : 'text-slate-600'}`}
@@ -168,20 +168,20 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
                                 )}
                             </div>
                             {review.comment && (
-                                <p className="mt-3 text-sm text-slate-400 leading-relaxed">{review.comment}</p>
+                                <p className="mt-3 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{review.comment}</p>
                             )}
 
                             {review.vendorReply && (
-                                <div className="mt-4 rounded-xl bg-dark-850 border border-slate-800 p-4">
+                                <div className="mt-4 rounded-xl bg-dark-850 border border-slate-200 dark:border-slate-800 p-4">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-bold text-white uppercase tracking-widest">
+                                        <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest">
                                             Host Reply
                                         </span>
                                         <span className="text-xs text-slate-500">
                                             {new Date(review.replyCreatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                         </span>
                                     </div>
-                                    <p className="text-sm text-slate-300">{review.vendorReply}</p>
+                                    <p className="text-sm text-slate-600 dark:text-slate-300">{review.vendorReply}</p>
                                 </div>
                             )}
                         </div>

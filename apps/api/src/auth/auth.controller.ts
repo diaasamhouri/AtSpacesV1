@@ -2,7 +2,10 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  Patch,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -16,6 +19,10 @@ import {
   EmailLoginDto,
   SendOtpDto,
   VerifyOtpDto,
+  UpdateProfileDto,
+  BecomeVendorDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
 } from './dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
@@ -27,7 +34,7 @@ export class AuthController {
   constructor(
     private authService: AuthService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   // ==================== EMAIL AUTH ====================
 
@@ -77,7 +84,60 @@ export class AuthController {
     res.redirect(`${frontendUrl}/auth/callback?token=${result.accessToken}`);
   }
 
+  // ==================== PASSWORD RESET ====================
+
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Request a password reset OTP' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password with OTP code' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
+
   // ==================== PROTECTED ROUTES ====================
+
+  @Get('notifications/unread-count')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get unread notification count' })
+  async getUnreadNotificationCount(@Req() req: any) {
+    return this.authService.getUnreadNotificationCount(req.user.id);
+  }
+
+  @Get('notifications')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get paginated notifications for current user' })
+  async getNotifications(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.authService.getNotifications(req.user.id, {
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
+  @Patch('notifications/read-all')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark all notifications as read' })
+  async markAllNotificationsRead(@Req() req: any) {
+    return this.authService.markAllNotificationsRead(req.user.id);
+  }
+
+  @Patch('notifications/:id/read')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark a notification as read' })
+  async markNotificationRead(@Req() req: any, @Param('id') id: string) {
+    return this.authService.markNotificationRead(req.user.id, id);
+  }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
@@ -85,6 +145,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user profile' })
   async getProfile(@Req() req: any) {
     return this.authService.getProfile(req.user.id);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update current user profile' })
+  async updateProfile(@Req() req: any, @Body() dto: UpdateProfileDto) {
+    return this.authService.updateProfile(req.user.id, dto);
   }
 
   // ==================== VENDOR REGISTRATION ====================
@@ -95,8 +163,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Register as a vendor (requires login)' })
   async becomeVendor(
     @Req() req: any,
-    @Body() body: { companyName: string; description?: string },
+    @Body() dto: BecomeVendorDto,
   ) {
-    return this.authService.registerVendor(req.user.id, body);
+    return this.authService.registerVendor(req.user.id, dto);
   }
 }

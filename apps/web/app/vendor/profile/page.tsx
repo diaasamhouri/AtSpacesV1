@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { getVendorProfile, updateVendorProfile, requestVerification } from "../../../lib/vendor";
 import { VerifiedBadge } from "../../components/verified-badge";
 import { useAuth } from "../../../lib/auth-context";
+import { useToast } from "../../components/ui/toast-provider";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
+import StatusBadge from "../../components/ui/status-badge";
+import type { VendorProfile } from "../../../lib/types";
 
 const SOCIAL_PLATFORMS = [
     { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/..." },
@@ -16,7 +19,8 @@ const SOCIAL_PLATFORMS = [
 
 export default function VendorProfilePage() {
     const { token } = useAuth();
-    const [profile, setProfile] = useState<any>(null);
+    const { toast } = useToast();
+    const [profile, setProfile] = useState<VendorProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -45,7 +49,7 @@ export default function VendorProfilePage() {
             setProfile(updated);
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
-        } catch { alert("Failed to update profile."); }
+        } catch { toast("Failed to update profile.", "error"); }
         setSaving(false);
     };
 
@@ -54,8 +58,8 @@ export default function VendorProfilePage() {
     const handleRequestVerification = async () => {
         try {
             await requestVerification(token!);
-            alert("Verification request submitted! Admin will notify you once reviewed.");
-        } catch { alert("Failed to submit request."); }
+            toast("Verification request submitted! Admin will notify you once reviewed.", "success");
+        } catch { toast("Failed to submit request.", "error"); }
         setVerifyConfirmOpen(false);
     };
 
@@ -71,60 +75,58 @@ export default function VendorProfilePage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <h1 className="text-3xl font-bold text-white">Company Profile</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Company Profile</h1>
                     {profile?.isVerified ? (
                         <div className="flex items-center gap-1 rounded-full bg-brand-500/10 border border-brand-500/20 px-3 py-1.5 text-sm font-bold text-brand-400 shadow-sm">
                             <VerifiedBadge size="sm" /> Verified
                         </div>
                     ) : (
-                        <button onClick={() => setVerifyConfirmOpen(true)} className="rounded-full bg-dark-800 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-dark-700 hover:text-white transition-colors border border-slate-700">
+                        <button onClick={() => setVerifyConfirmOpen(true)} className="rounded-full bg-dark-800 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-dark-700 hover:text-gray-900 dark:hover:text-white transition-colors border border-slate-200 dark:border-slate-700">
                             Request Verification
                         </button>
                     )}
                 </div>
-                <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold tracking-wider uppercase border ${profile?.status === "APPROVED" ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"}`}>
-                    {profile?.status}
-                </span>
+                <StatusBadge status={profile?.status || ""} size="md" />
             </div>
 
             {success && <div className="rounded-2xl bg-green-500/10 p-4 text-sm font-bold text-green-400 border border-green-500/20">✓ Profile updated successfully!</div>}
 
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-800 space-y-6">
-                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Company Details</h2>
+            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+                <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Company Details</h2>
                 <div>
-                    <label className="block text-sm font-bold text-white mb-2">Company Name</label>
+                    <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">Company Name</label>
                     <input type="text" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-                        className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                        className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                 </div>
                 <div>
-                    <label className="block text-sm font-bold text-white mb-2">Description</label>
+                    <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">Description</label>
                     <textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                        className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-bold text-white mb-2">Phone</label>
+                        <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">Phone</label>
                         <input type="text" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                            className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-white mb-2">Website</label>
+                        <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">Website</label>
                         <input type="url" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })}
-                            className="block w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
+                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
                     </div>
                 </div>
             </div>
 
             {/* Social Media */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-800 space-y-6">
-                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Social Media</h2>
+            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+                <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Social Media</h2>
                 {SOCIAL_PLATFORMS.map((p) => (
                     <div key={p.key} className="flex items-center gap-4">
-                        <span className="w-32 text-sm font-bold text-slate-300">{p.label}</span>
+                        <span className="w-32 text-sm font-bold text-slate-600 dark:text-slate-300">{p.label}</span>
                         <input type="url" placeholder={p.placeholder}
                             value={socialLinks[p.key] || ""}
                             onChange={(e) => setSocialLinks({ ...socialLinks, [p.key]: e.target.value })}
-                            className="flex-1 rounded-xl border border-slate-700 px-4 py-3 text-sm text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-600" />
+                            className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-600" />
                     </div>
                 ))}
             </div>

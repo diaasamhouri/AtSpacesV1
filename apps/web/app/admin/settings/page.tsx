@@ -3,10 +3,13 @@
 import { useEffect, useState } from "react";
 import { getSystemSettings, updateSystemSettings } from "../../../lib/admin";
 import { useAuth } from "../../../lib/auth-context";
+import { useToast } from "../../components/ui/toast-provider";
+import type { SystemSetting } from "../../../lib/types";
 
 export default function AdminSettingsPage() {
     const { user, token } = useAuth();
-    const [settings, setSettings] = useState<any[]>([]);
+    const { toast } = useToast();
+    const [settings, setSettings] = useState<SystemSetting[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [feedback, setFeedback] = useState({ type: "", message: "" });
@@ -23,7 +26,7 @@ export default function AdminSettingsPage() {
         try {
             const data = await getSystemSettings(token!);
             setSettings(data);
-            const commSetting = data.find((s: any) => s.key === "DEFAULT_COMMISSION_RATE");
+            const commSetting = data.find((s) => s.key === "DEFAULT_COMMISSION_RATE");
             if (commSetting) {
                 setDefaultCommission(commSetting.value);
             } else {
@@ -31,6 +34,7 @@ export default function AdminSettingsPage() {
             }
         } catch (err) {
             console.error("Failed to load settings:", err);
+            toast("Failed to load settings.", "error");
         } finally {
             setLoading(false);
         }
@@ -61,8 +65,8 @@ export default function AdminSettingsPage() {
     if (!isSuperAdmin) {
         return (
             <div className="flex flex-col items-center justify-center py-20">
-                <h2 className="text-xl font-bold text-white">Access Denied</h2>
-                <p className="text-slate-400 mt-2">Only Super Admins can manage system settings.</p>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Access Denied</h2>
+                <p className="text-slate-500 dark:text-slate-400 mt-2">Only Super Admins can manage system settings.</p>
             </div>
         );
     }
@@ -70,7 +74,7 @@ export default function AdminSettingsPage() {
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
             <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-white">System Settings</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">System Settings</h1>
             </div>
 
             {loading ? (
@@ -78,10 +82,10 @@ export default function AdminSettingsPage() {
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
                 </div>
             ) : (
-                <div className="bg-dark-900 rounded-2xl shadow-float border border-slate-800 overflow-hidden">
-                    <div className="p-6 border-b border-slate-800">
-                        <h2 className="text-lg font-bold text-white">Platform Configuration</h2>
-                        <p className="text-sm text-slate-400 mt-1">Manage global rates and overrides for the application.</p>
+                <div className="bg-dark-900 rounded-2xl shadow-float border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Platform Configuration</h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage global rates and overrides for the application.</p>
                     </div>
 
                     <div className="p-6 space-y-6">
@@ -93,7 +97,7 @@ export default function AdminSettingsPage() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-3 col-span-1">
-                                <label className="block text-sm font-bold text-white">
+                                <label className="block text-sm font-bold text-gray-900 dark:text-white">
                                     Default Platform Commission Rate (%)
                                 </label>
                                 <div className="relative">
@@ -102,7 +106,7 @@ export default function AdminSettingsPage() {
                                         min="0"
                                         max="100"
                                         step="0.1"
-                                        className="block w-full rounded-xl border border-slate-700 pl-4 pr-12 text-white text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500 bg-dark-850 py-3 transition-colors"
+                                        className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 pl-4 pr-12 text-gray-900 dark:text-white text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500 bg-dark-850 py-3 transition-colors"
                                         placeholder="10"
                                         value={defaultCommission}
                                         onChange={(e) => setDefaultCommission(e.target.value)}
@@ -118,7 +122,7 @@ export default function AdminSettingsPage() {
                         </div>
                     </div>
 
-                    <div className="bg-dark-850 px-6 py-4 flex justify-end border-t border-slate-800">
+                    <div className="bg-dark-850 px-6 py-4 flex justify-end border-t border-slate-200 dark:border-slate-800">
                         <button
                             onClick={handleSave}
                             disabled={saving}
