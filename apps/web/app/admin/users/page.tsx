@@ -86,10 +86,10 @@ export default function AdminUsersPage() {
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl bg-dark-900 shadow-sm border border-slate-200 dark:border-slate-800">
+        <div className="overflow-hidden rounded-2xl bg-white dark:bg-dark-900 shadow-sm border border-slate-200 dark:border-slate-800">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-800">
-              <thead className="bg-dark-850">
+              <thead className="bg-slate-50 dark:bg-dark-850">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Name & Contact</th>
                   <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Role</th>
@@ -141,7 +141,7 @@ export default function AdminUsersPage() {
       {/* Create Team User Modal */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCreate(false)}>
-          <div className="w-full max-w-md rounded-3xl bg-dark-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800 shadow-black/50" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-dark-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800 shadow-black/50" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Create Team User</h3>
 
             {createError && (
@@ -152,22 +152,22 @@ export default function AdminUsersPage() {
               <div>
                 <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Full Name</label>
                 <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                  className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-white dark:bg-dark-850 focus:bg-slate-100 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Email</label>
                 <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                  className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-white dark:bg-dark-850 focus:bg-slate-100 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Password</label>
                 <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                  className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-white dark:bg-dark-850 focus:bg-slate-100 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">Role</label>
                 <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
+                  className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-medium text-gray-900 dark:text-white bg-white dark:bg-dark-850 focus:bg-slate-100 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
                   <option value="MODERATOR">Moderator</option>
                   <option value="ACCOUNTANT">Accountant</option>
                 </select>
@@ -175,7 +175,7 @@ export default function AdminUsersPage() {
             </div>
 
             <div className="mt-8 flex justify-end gap-4">
-              <button onClick={() => setShowCreate(false)} className="rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-bold text-gray-900 dark:text-white bg-dark-850 hover:bg-gray-100 dark:hover:bg-dark-800 hover:border-slate-600 transition-colors">Cancel</button>
+              <button onClick={() => setShowCreate(false)} className="rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-bold text-gray-900 dark:text-white bg-white dark:bg-dark-850 hover:bg-gray-100 dark:hover:bg-dark-800 hover:border-slate-600 transition-colors">Cancel</button>
               <button onClick={handleCreate} disabled={!form.name || !form.email || !form.password}
                 className="rounded-xl px-6 py-3 text-sm font-bold text-white bg-brand-500 active:scale-95 hover:bg-brand-600 transition-colors shadow-[0_4px_12px_rgba(255,91,4,0.4)] disabled:opacity-50 disabled:shadow-none">Create User</button>
             </div>

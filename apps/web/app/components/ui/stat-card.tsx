@@ -27,7 +27,7 @@ export default function StatCard({ label, value, icon, trend, trendValue, color 
   const c = colorMap[color] ?? fallback;
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl bg-dark-900 border border-slate-200 dark:border-slate-800 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)] hover:border-slate-700">
+    <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-slate-800 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)] hover:border-slate-700">
       {/* Gradient accent bar */}
       <div className={`absolute left-0 top-0 h-full w-1 bg-gradient-to-b ${c.gradient}`} />
 

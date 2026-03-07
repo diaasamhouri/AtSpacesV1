@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  getNotificationLink,
   type Notification,
 } from "../../lib/notifications";
 import { useAuth } from "../../lib/auth-context";
@@ -13,7 +15,8 @@ import StatusBadge from "../components/ui/status-badge";
 import type { PaginationMeta } from "../../lib/types";
 
 export default function NotificationsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,6 +58,12 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleClick = async (n: Notification) => {
+    if (!n.isRead) await handleMarkRead(n.id);
+    const link = getNotificationLink(n, user?.role || "CUSTOMER");
+    if (link) router.push(link);
+  };
+
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
@@ -89,45 +98,66 @@ export default function NotificationsPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {notifications.map((n) => (
-              <div
-                key={n.id}
-                className={`rounded-2xl p-4 shadow-float border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer ${
-                  n.isRead
-                    ? "bg-white dark:bg-dark-900"
-                    : "bg-white dark:bg-dark-900 border-l-4 border-l-brand-500"
-                }`}
-                onClick={() => {
-                  if (!n.isRead) handleMarkRead(n.id);
-                }}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <StatusBadge
-                        status={n.type}
-                        label={n.type.replace(/_/g, " ")}
-                      />
+            {notifications.map((n) => {
+              const link = getNotificationLink(n, user?.role || "CUSTOMER");
+              return (
+                <div
+                  key={n.id}
+                  className={`rounded-2xl p-4 shadow-float border border-slate-200 dark:border-slate-800 transition-colors ${
+                    link ? "cursor-pointer" : ""
+                  } ${
+                    n.isRead
+                      ? "bg-white dark:bg-dark-900"
+                      : "bg-white dark:bg-dark-900 border-l-4 border-l-brand-500"
+                  }`}
+                  onClick={() => handleClick(n)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <StatusBadge
+                          status={n.type}
+                          label={n.type.replace(/_/g, " ")}
+                        />
+                        {!n.isRead && (
+                          <span className="h-2 w-2 rounded-full bg-brand-500" />
+                        )}
+                      </div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                        {n.title}
+                      </h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                        {n.message}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {format(
+                          new Date(n.createdAt),
+                          "MMM d, yyyy 'at' h:mm a"
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-3 shrink-0">
                       {!n.isRead && (
-                        <span className="h-2 w-2 rounded-full bg-brand-500" />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleMarkRead(n.id); }}
+                          className="rounded-lg p-1.5 text-slate-400 hover:text-brand-500 hover:bg-brand-500/10 transition-colors"
+                          title="Mark as read"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                          </svg>
+                        </button>
+                      )}
+                      {link && (
+                        <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                        </svg>
                       )}
                     </div>
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                      {n.title}
-                    </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                      {n.message}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {format(
-                        new Date(n.createdAt),
-                        "MMM d, yyyy 'at' h:mm a"
-                      )}
-                    </p>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

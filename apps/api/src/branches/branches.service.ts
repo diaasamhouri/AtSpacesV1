@@ -38,6 +38,17 @@ export class BranchesService {
       ];
     }
 
+    if (query.capacity) {
+      where.services = {
+        ...where.services,
+        some: {
+          ...(where.services?.some || {}),
+          isActive: true,
+          capacity: { gte: query.capacity },
+        },
+      };
+    }
+
     const [branches, total] = await Promise.all([
       this.prisma.branch.findMany({
         where,
@@ -152,6 +163,7 @@ export class BranchesService {
             id: true,
             type: true,
             name: true,
+            unitNumber: true,
             description: true,
             capacity: true,
             pricing: {
@@ -162,6 +174,13 @@ export class BranchesService {
                 interval: true,
                 price: true,
                 currency: true,
+              },
+            },
+            setupConfigs: {
+              select: {
+                setupType: true,
+                minPeople: true,
+                maxPeople: true,
               },
             },
           },
@@ -185,14 +204,19 @@ export class BranchesService {
     };
   }
 
-  async getVendorBranches(userId: string) {
+  async getVendorBranches(userId: string, query: { unitType?: string } = {}) {
     const vendorProfile = await this.prisma.vendorProfile.findUnique({
       where: { userId },
     });
     if (!vendorProfile) throw new ForbiddenException('Vendor profile not found');
 
+    const where: any = { vendorProfileId: vendorProfile.id };
+    if (query.unitType) {
+      where.services = { some: { type: query.unitType } };
+    }
+
     const branches = await this.prisma.branch.findMany({
-      where: { vendorProfileId: vendorProfile.id },
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         services: {
@@ -200,14 +224,31 @@ export class BranchesService {
             id: true,
             type: true,
             name: true,
+            unitNumber: true,
             capacity: true,
             isActive: true,
+            setupConfigs: {
+              select: { setupType: true, minPeople: true, maxPeople: true },
+            },
+            pricing: {
+              where: { isActive: true },
+              orderBy: { price: 'asc' },
+              select: { id: true, interval: true, pricingMode: true, price: true, currency: true },
+            },
           }
         }
       }
     });
 
-    return { data: branches };
+    return {
+      data: branches.map(b => ({
+        ...b,
+        services: b.services.map(s => ({
+          ...s,
+          pricing: s.pricing.map(p => ({ ...p, price: p.price.toNumber() })),
+        })),
+      })),
+    };
   }
 
   async createBranch(userId: string, dto: CreateBranchDto) {

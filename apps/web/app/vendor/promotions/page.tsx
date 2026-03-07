@@ -120,7 +120,7 @@ export default function PromotionsPage() {
                 </div>
             )}
 
-            <div className="bg-dark-900 p-6 rounded-2xl shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="bg-white dark:bg-dark-900 p-6 rounded-2xl shadow-float border border-slate-200 dark:border-slate-800">
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Create New Promo Code</h2>
                 <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div>
@@ -131,7 +131,7 @@ export default function PromotionsPage() {
                             onChange={e => setCode(e.target.value.toUpperCase())}
                             required
                             placeholder="e.g. SUMMER20"
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 uppercase transition-colors"
+                            className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 uppercase transition-colors"
                         />
                     </div>
                     <div>
@@ -144,7 +144,7 @@ export default function PromotionsPage() {
                             min="1"
                             max="100"
                             placeholder="e.g. 15"
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                            className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                         />
                     </div>
                     <div>
@@ -152,7 +152,7 @@ export default function PromotionsPage() {
                         <select
                             value={branchId}
                             onChange={e => setBranchId(e.target.value)}
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                            className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                         >
                             <option value="">All Branches</option>
                             {branches.map(b => (
@@ -168,7 +168,7 @@ export default function PromotionsPage() {
                             onChange={e => setMaxUses(e.target.value)}
                             min="0"
                             placeholder="Leave empty for unlimited"
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                            className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                         />
                     </div>
                     <div>
@@ -177,7 +177,7 @@ export default function PromotionsPage() {
                             type="datetime-local"
                             value={validUntil}
                             onChange={e => setValidUntil(e.target.value)}
-                            className="w-full px-4 py-2.5 bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                            className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                         />
                     </div>
                     <div className="flex items-end">
@@ -192,7 +192,7 @@ export default function PromotionsPage() {
                 </form>
             </div>
 
-            <div className="bg-dark-900 rounded-2xl shadow-float border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="bg-white dark:bg-dark-900 rounded-2xl shadow-float border border-slate-200 dark:border-slate-800 overflow-hidden">
                 <div className="p-6 border-b border-slate-200 dark:border-slate-800">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white">Active Promo Codes</h2>
                 </div>
@@ -203,7 +203,7 @@ export default function PromotionsPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full divide-y divide-slate-800">
-                            <thead className="bg-dark-850">
+                            <thead className="bg-slate-50 dark:bg-dark-850">
                                 <tr>
                                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Code</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Discount</th>

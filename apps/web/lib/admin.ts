@@ -16,6 +16,10 @@ import type {
     AdminVendorDetail,
     AdminBookingDetail,
     AdminBranchDetail,
+    AdminService,
+    AdminServiceDetail,
+    PaymentLogEntry,
+    PendingVerification,
 } from './types';
 
 // ==================== DASHBOARD ====================
@@ -44,6 +48,12 @@ export async function updateVendorStatus(
     });
 }
 
+export async function getPendingVerifications(token: string, params?: { page?: number; limit?: number }): Promise<PaginatedResponse<PendingVerification>> {
+    return apiFetch<PaginatedResponse<PendingVerification>>('/admin/vendors/verification-queue', {
+        token, params: { page: params?.page, limit: params?.limit },
+    });
+}
+
 export async function verifyVendor(
     token: string, id: string, verified: boolean, note?: string
 ): Promise<AdminVendor> {
@@ -68,6 +78,30 @@ export async function createTeamUser(
 
 export async function toggleUserActive(token: string, id: string): Promise<AdminUser> {
     return apiFetch<AdminUser>(`/admin/users/${id}/toggle-active`, { method: 'PATCH', token });
+}
+
+// ==================== ADMIN SERVICES ====================
+
+export async function getAdminServices(token: string, params?: { page?: number; limit?: number; search?: string; branchId?: string; type?: string; floor?: string }): Promise<PaginatedResponse<AdminService>> {
+    return apiFetch<PaginatedResponse<AdminService>>('/admin/services', {
+        token, params: { page: params?.page, limit: params?.limit, search: params?.search, branchId: params?.branchId, type: params?.type, floor: params?.floor },
+    });
+}
+
+export async function getAdminServiceById(token: string, id: string): Promise<AdminServiceDetail> {
+    return apiFetch<AdminServiceDetail>(`/admin/services/${id}`, { token });
+}
+
+export async function createAdminService(token: string, data: Record<string, unknown>): Promise<AdminServiceDetail> {
+    return apiFetch<AdminServiceDetail>('/admin/services', { method: 'POST', token, body: data });
+}
+
+export async function updateAdminService(token: string, id: string, data: Record<string, unknown>): Promise<AdminServiceDetail> {
+    return apiFetch<AdminServiceDetail>(`/admin/services/${id}`, { method: 'PATCH', token, body: data });
+}
+
+export async function deleteAdminService(token: string, id: string): Promise<void> {
+    await apiFetch(`/admin/services/${id}`, { method: 'DELETE', token });
 }
 
 // ==================== BOOKINGS ====================
@@ -98,11 +132,15 @@ export async function refundPayment(token: string, id: string): Promise<AdminPay
     return apiFetch<AdminPayment>(`/admin/payments/${id}/refund`, { method: 'PATCH', token });
 }
 
+export async function getAdminPaymentLogs(token: string, paymentId: string): Promise<PaymentLogEntry[]> {
+    return apiFetch<PaymentLogEntry[]>(`/admin/payments/${paymentId}/logs`, { token });
+}
+
 // ==================== BRANCHES ====================
 
-export async function getAdminBranches(token: string, params?: { page?: number; limit?: number; search?: string }): Promise<PaginatedResponse<AdminBranch>> {
+export async function getAdminBranches(token: string, params?: { page?: number; limit?: number; search?: string; status?: string; city?: string }): Promise<PaginatedResponse<AdminBranch>> {
     return apiFetch<PaginatedResponse<AdminBranch>>('/admin/branches', {
-        token, params: { page: params?.page, limit: params?.limit, search: params?.search },
+        token, params: { page: params?.page, limit: params?.limit, search: params?.search, status: params?.status, city: params?.city },
     });
 }
 
@@ -116,9 +154,9 @@ export async function updateBranchStatus(token: string, id: string, status: stri
 
 // ==================== APPROVALS ====================
 
-export async function getAdminApprovals(token: string, params?: { page?: number; limit?: number }): Promise<PaginatedResponse<AdminApproval>> {
+export async function getAdminApprovals(token: string, params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<PaginatedResponse<AdminApproval>> {
     return apiFetch<PaginatedResponse<AdminApproval>>('/admin/approvals', {
-        token, params: { page: params?.page, limit: params?.limit },
+        token, params: { page: params?.page, limit: params?.limit, search: params?.search, status: params?.status },
     });
 }
 

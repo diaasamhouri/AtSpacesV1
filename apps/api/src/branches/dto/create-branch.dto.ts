@@ -67,4 +67,24 @@ export class CreateBranchDto {
     @IsBoolean()
     @IsOptional()
     autoAcceptBookings?: boolean;
+
+    @ApiProperty({ example: 150.5, description: 'Gross area in sqm', required: false })
+    @IsNumber()
+    @IsOptional()
+    grossArea?: number;
+
+    @ApiProperty({ example: '+962791234567', description: 'Reception mobile number', required: false })
+    @IsString()
+    @IsOptional()
+    receptionMobile?: string;
+
+    @ApiProperty({ example: 'reception@branch.com', description: 'Reception email', required: false })
+    @IsString()
+    @IsOptional()
+    receptionEmail?: string;
+
+    @ApiProperty({ example: 'https://atspaces.com/branch/downtown', description: 'Profile URL', required: false })
+    @IsString()
+    @IsOptional()
+    profileUrl?: string;
 }

@@ -17,6 +17,10 @@ export function formatServiceType(type: string): string {
   return map[type] || type;
 }
 
+export function formatUnitType(type: string): string {
+  return formatServiceType(type);
+}
+
 export function formatServiceTypeSlug(type: string): string {
   return type.toLowerCase().replace(/_/g, '-');
 }
@@ -50,6 +54,7 @@ export function formatBookingStatus(status: string): string {
     NO_SHOW: 'No Show',
     CANCELLED: 'Cancelled',
     REJECTED: 'Rejected',
+    EXPIRED: 'Expired',
   };
   return map[status] || status;
 }
@@ -122,6 +127,7 @@ export function bookingStatusColor(status: string): string {
     NO_SHOW: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     CANCELLED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     REJECTED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    EXPIRED: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
   };
   return map[status] || 'bg-gray-100 text-gray-800';
 }

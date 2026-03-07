@@ -14,6 +14,14 @@ import type {
     Review,
     PaginatedResponse,
     ServiceItem,
+    CustomerSearchResult,
+    Booking,
+    PaymentLogEntry,
+    VendorAddOn,
+    AuthorizedSignatory,
+    CompanyContact,
+    DepartmentContact,
+    BankingInfo,
 } from './types';
 import { apiFetch } from './api';
 
@@ -39,8 +47,11 @@ export async function requestVerification(token: string): Promise<{ message: str
 
 // ==================== BRANCHES ====================
 
-export async function getVendorBranches(token: string): Promise<{ data: VendorBranchDetail[] }> {
-    return apiFetch<{ data: VendorBranchDetail[] }>('/branches/vendor', { token });
+export async function getVendorBranches(token: string, params?: { unitType?: string }): Promise<{ data: VendorBranchDetail[] }> {
+    return apiFetch<{ data: VendorBranchDetail[] }>('/branches/vendor', {
+        token,
+        params: { unitType: params?.unitType },
+    });
 }
 
 export async function getVendorBranchById(token: string, id: string): Promise<VendorBranchDetail> {
@@ -78,7 +89,7 @@ export async function updateService(token: string, id: string, data: Record<stri
 
 // ==================== BOOKINGS ====================
 
-export async function getVendorBookings(token: string, params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<PaginatedResponse<VendorBooking>> {
+export async function getVendorBookings(token: string, params?: { page?: number; limit?: number; search?: string; status?: string; salesApproved?: boolean; accountantApproved?: boolean }): Promise<PaginatedResponse<VendorBooking>> {
     return apiFetch<PaginatedResponse<VendorBooking>>('/bookings/vendor', {
         token,
         params: {
@@ -86,12 +97,22 @@ export async function getVendorBookings(token: string, params?: { page?: number;
             limit: params?.limit,
             search: params?.search,
             status: params?.status,
+            salesApproved: params?.salesApproved !== undefined ? String(params.salesApproved) : undefined,
+            accountantApproved: params?.accountantApproved !== undefined ? String(params.accountantApproved) : undefined,
         },
     });
 }
 
 export async function updateBookingStatus(token: string, id: string, status: BookingStatus): Promise<VendorBooking> {
     return apiFetch<VendorBooking>(`/bookings/${id}/status`, { method: 'PATCH', token, body: { status } });
+}
+
+export async function approveSales(token: string, bookingId: string): Promise<VendorBooking> {
+    return apiFetch<VendorBooking>(`/bookings/${bookingId}/approve-sales`, { method: 'PATCH', token });
+}
+
+export async function approveAccountant(token: string, bookingId: string): Promise<VendorBooking> {
+    return apiFetch<VendorBooking>(`/bookings/${bookingId}/approve-accountant`, { method: 'PATCH', token });
 }
 
 export async function getVendorCalendar(token: string, searchParams?: URLSearchParams): Promise<VendorCalendarEvent[]> {
@@ -156,4 +177,139 @@ export async function updatePromoCode(token: string, promoId: string, data: Reco
 
 export async function deletePromoCode(token: string, promoId: string): Promise<{ message: string }> {
     return apiFetch<{ message: string }>(`/vendor/promotions/${promoId}`, { method: 'DELETE', token });
+}
+
+// ==================== PAYMENTS ====================
+
+export async function collectVendorPayment(token: string, bookingId: string, options?: { receiptNumber?: string; notes?: string }): Promise<{ id: string; method: string; status: string; amount: number; currency: string; paidAt: string | null }> {
+    return apiFetch(`/vendor/payments/${bookingId}/collect`, { method: 'PATCH', token, body: options || {} });
+}
+
+export async function bulkCollectVendorPayments(token: string, bookingIds: string[], options?: { receiptNumber?: string; notes?: string }): Promise<{ collected: number; bookingIds: string[] }> {
+    return apiFetch('/vendor/payments/bulk-collect', { method: 'POST', token, body: { bookingIds, ...options } });
+}
+
+export async function getVendorPaymentLogs(token: string, bookingId: string): Promise<PaymentLogEntry[]> {
+    return apiFetch<PaymentLogEntry[]>(`/vendor/payments/${bookingId}/logs`, { token });
+}
+
+// ==================== CUSTOMER SEARCH ====================
+
+export async function searchVendorCustomers(token: string, search: string, limit = 10): Promise<{ data: CustomerSearchResult[] }> {
+    return apiFetch<{ data: CustomerSearchResult[] }>('/vendor/customers', {
+        token,
+        params: { search, limit },
+    });
+}
+
+// ==================== SIGNATORY CRUD ====================
+
+export async function addSignatory(token: string, data: Record<string, unknown>): Promise<AuthorizedSignatory> {
+    return apiFetch<AuthorizedSignatory>('/vendor/profile/signatories', { method: 'POST', token, body: data });
+}
+
+export async function updateSignatory(token: string, id: string, data: Record<string, unknown>): Promise<AuthorizedSignatory> {
+    return apiFetch<AuthorizedSignatory>(`/vendor/profile/signatories/${id}`, { method: 'PATCH', token, body: data });
+}
+
+export async function deleteSignatory(token: string, id: string): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>(`/vendor/profile/signatories/${id}`, { method: 'DELETE', token });
+}
+
+// ==================== COMPANY CONTACT CRUD ====================
+
+export async function addCompanyContact(token: string, data: Record<string, unknown>): Promise<CompanyContact> {
+    return apiFetch<CompanyContact>('/vendor/profile/company-contacts', { method: 'POST', token, body: data });
+}
+
+export async function updateCompanyContact(token: string, id: string, data: Record<string, unknown>): Promise<CompanyContact> {
+    return apiFetch<CompanyContact>(`/vendor/profile/company-contacts/${id}`, { method: 'PATCH', token, body: data });
+}
+
+export async function deleteCompanyContact(token: string, id: string): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>(`/vendor/profile/company-contacts/${id}`, { method: 'DELETE', token });
+}
+
+// ==================== DEPARTMENT CONTACT CRUD ====================
+
+export async function addDepartmentContact(token: string, data: Record<string, unknown>): Promise<DepartmentContact> {
+    return apiFetch<DepartmentContact>('/vendor/profile/department-contacts', { method: 'POST', token, body: data });
+}
+
+export async function updateDepartmentContact(token: string, id: string, data: Record<string, unknown>): Promise<DepartmentContact> {
+    return apiFetch<DepartmentContact>(`/vendor/profile/department-contacts/${id}`, { method: 'PATCH', token, body: data });
+}
+
+export async function deleteDepartmentContact(token: string, id: string): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>(`/vendor/profile/department-contacts/${id}`, { method: 'DELETE', token });
+}
+
+// ==================== BANKING INFO CRUD ====================
+
+export async function addBankingInfo(token: string, data: Record<string, unknown>): Promise<BankingInfo> {
+    return apiFetch<BankingInfo>('/vendor/profile/banking-info', { method: 'POST', token, body: data });
+}
+
+export async function updateBankingInfo(token: string, id: string, data: Record<string, unknown>): Promise<BankingInfo> {
+    return apiFetch<BankingInfo>(`/vendor/profile/banking-info/${id}`, { method: 'PATCH', token, body: data });
+}
+
+export async function deleteBankingInfo(token: string, id: string): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>(`/vendor/profile/banking-info/${id}`, { method: 'DELETE', token });
+}
+
+// ==================== VENDOR BOOKING CREATION ====================
+
+export async function createVendorBooking(token: string, data: {
+    customerId: string;
+    branchId: string;
+    days: {
+        date: string;
+        startTime: string;
+        endTime: string;
+        serviceId: string;
+        setupType?: string;
+        pricingInterval?: string;
+        unitPrice?: number;
+        numberOfPeople?: number;
+        notes?: string;
+        addOns?: { vendorAddOnId: string; quantity: number; serviceTime?: string; comments?: string }[];
+    }[];
+    subjectToTax?: boolean;
+    discountType?: string;
+    discountValue?: number;
+    promoCode?: string;
+    notes?: string;
+}): Promise<{ bookingIds: string[]; bookingGroupId: string; financialSummary: { subtotal: number; discount: number; tax: number; total: number } }> {
+    return apiFetch('/vendor/bookings/create', { method: 'POST', token, body: data });
+}
+
+// ==================== VENDOR ADD-ONS ====================
+
+export async function getVendorAddOns(token: string): Promise<VendorAddOn[]> {
+    return apiFetch<VendorAddOn[]>('/vendor/addons', { token });
+}
+
+export async function createVendorAddOn(token: string, data: { name: string; nameAr?: string; unitPrice: number }): Promise<VendorAddOn> {
+    return apiFetch<VendorAddOn>('/vendor/addons', { method: 'POST', token, body: data });
+}
+
+export async function updateVendorAddOn(token: string, id: string, data: Partial<{ name: string; nameAr: string; unitPrice: number; isActive: boolean }>): Promise<VendorAddOn> {
+    return apiFetch<VendorAddOn>(`/vendor/addons/${id}`, { method: 'PATCH', token, body: data });
+}
+
+export async function deleteVendorAddOn(token: string, id: string): Promise<void> {
+    return apiFetch<void>(`/vendor/addons/${id}`, { method: 'DELETE', token });
+}
+
+// ==================== CREATE CUSTOMER ====================
+
+export async function createCustomerInline(token: string, data: { name: string; email?: string; phone?: string; entityType?: string }): Promise<CustomerSearchResult & { isNew: boolean }> {
+    return apiFetch<CustomerSearchResult & { isNew: boolean }>('/vendor/customers', { method: 'POST', token, body: data });
+}
+
+// ==================== PROMO CODE VALIDATION ====================
+
+export async function validatePromoCode(token: string, code: string, branchId?: string): Promise<{ valid: boolean; discountPercent: number; message: string; promoCodeId?: string }> {
+    return apiFetch('/vendor/promo-codes/validate', { method: 'POST', token, body: { code, branchId } });
 }

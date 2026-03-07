@@ -173,7 +173,7 @@ export function MobileFilterDrawer({ activeCity, activeType, activeSort, resultC
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
 
           {/* Drawer from bottom */}
-          <div className="absolute bottom-0 left-0 right-0 max-h-[80vh] rounded-t-3xl bg-dark-900 border-t border-slate-200 dark:border-slate-800 p-6 overflow-y-auto animate-in slide-in-from-bottom duration-300">
+          <div className="absolute bottom-0 left-0 right-0 max-h-[80vh] rounded-t-3xl bg-white dark:bg-dark-900 border-t border-slate-200 dark:border-slate-800 p-6 overflow-y-auto animate-in slide-in-from-bottom duration-300">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Filters</h3>

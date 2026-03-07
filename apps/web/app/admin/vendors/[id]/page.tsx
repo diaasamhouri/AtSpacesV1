@@ -14,6 +14,26 @@ import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 import Link from "next/link";
 import type { AdminVendorDetail } from "../../../../lib/types";
 
+function CollapsibleSection({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+    const [open, setOpen] = useState(defaultOpen);
+    return (
+        <div className="rounded-2xl bg-white dark:bg-dark-900 shadow-float border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-6 text-left hover:bg-slate-100 dark:hover:bg-dark-850 transition-colors">
+                <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{title}</h2>
+                <svg className={`h-5 w-5 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+            </button>
+            {open && <div className="px-6 pb-6">{children}</div>}
+        </div>
+    );
+}
+
+function maskString(val: string | null): string {
+    if (!val || val.length <= 4) return val || "\u2014";
+    return "\u2022".repeat(val.length - 4) + val.slice(-4);
+}
+
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export default function AdminVendorDetailPage() {
@@ -109,7 +129,7 @@ export default function AdminVendorDetailPage() {
             </Link>
 
             {/* Header */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
@@ -148,7 +168,7 @@ export default function AdminVendorDetailPage() {
 
             {/* Application Details */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800 space-y-6">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800 space-y-6">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Application Details</h2>
                     <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                         {vendor.phone && (<><dt className="text-slate-500 font-medium">Phone</dt><dd className="text-gray-900 dark:text-white font-medium">{vendor.phone}</dd></>)}
@@ -190,7 +210,7 @@ export default function AdminVendorDetailPage() {
                                                 .then(() => toast(`Commission updated to ${rate === null ? "Default" : rate + "%"}`, "success"))
                                                 .catch(() => toast("Failed to update.", "error"));
                                         }}
-                                        className="block w-full rounded-xl border border-orange-500/30 bg-dark-900 pl-4 pr-10 py-2.5 text-sm font-bold text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                                        className="block w-full rounded-xl border border-orange-500/30 bg-white dark:bg-dark-900 pl-4 pr-10 py-2.5 text-sm font-bold text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
                                     />
                                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4">
                                         <span className="text-slate-500 text-sm font-bold">%</span>
@@ -203,7 +223,7 @@ export default function AdminVendorDetailPage() {
                 </div>
 
                 {/* Photos */}
-                <div className="rounded-2xl bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Space Photos</h2>
                     {vendor.images && vendor.images.length > 0 ? (
                         <div className="grid grid-cols-2 gap-3">
@@ -223,16 +243,160 @@ export default function AdminVendorDetailPage() {
                 </div>
             </div>
 
+            {/* Company Legal Information */}
+            {(vendor.companyLegalName || vendor.companyNationalId || vendor.companyRegistrationNumber || vendor.companyDescription) && (
+                <CollapsibleSection title="Company Legal Information">
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                        {vendor.companyLegalName && (<><dt className="text-slate-500 font-medium">Legal Name</dt><dd className="text-gray-900 dark:text-white font-medium">{vendor.companyLegalName}</dd></>)}
+                        {vendor.companyShortName && (<><dt className="text-slate-500 font-medium">Short Name</dt><dd className="text-gray-900 dark:text-white font-medium">{vendor.companyShortName}</dd></>)}
+                        {vendor.companyTradeName && (<><dt className="text-slate-500 font-medium">Trade Name</dt><dd className="text-gray-900 dark:text-white font-medium">{vendor.companyTradeName}</dd></>)}
+                        {vendor.companyNationalId && (<><dt className="text-slate-500 font-medium">National ID</dt><dd className="text-gray-900 dark:text-white font-medium">{vendor.companyNationalId}</dd></>)}
+                        {vendor.companyRegistrationNumber && (<><dt className="text-slate-500 font-medium">Registration Number</dt><dd className="text-gray-900 dark:text-white font-medium">{vendor.companyRegistrationNumber}</dd></>)}
+                        {vendor.companyRegistrationDate && (<><dt className="text-slate-500 font-medium">Registration Date</dt><dd className="text-gray-900 dark:text-white font-medium">{format(new Date(vendor.companyRegistrationDate), "MMM d, yyyy")}</dd></>)}
+                        {vendor.companySalesTaxNumber && (<><dt className="text-slate-500 font-medium">Sales Tax Number</dt><dd className="text-gray-900 dark:text-white font-medium">{vendor.companySalesTaxNumber}</dd></>)}
+                        {vendor.registeredInCountry && (<><dt className="text-slate-500 font-medium">Registered In</dt><dd className="text-gray-900 dark:text-white font-medium">{vendor.registeredInCountry}</dd></>)}
+                        <dt className="text-slate-500 font-medium">Tax Exemption</dt>
+                        <dd><span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${vendor.hasTaxExemption ? "bg-green-500/10 text-green-500" : "bg-slate-500/10 text-slate-400"}`}>{vendor.hasTaxExemption ? "Yes" : "No"}</span></dd>
+                    </dl>
+                    {vendor.companyDescription && (
+                        <div className="mt-4">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Company Description</h3>
+                            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{vendor.companyDescription}</p>
+                        </div>
+                    )}
+                </CollapsibleSection>
+            )}
+
+            {/* Verification Info */}
+            {(vendor.verificationRequestedAt || vendor.verifiedAt || vendor.verificationNote) && (
+                <div className="rounded-2xl bg-blue-500/10 p-6 border border-blue-500/20">
+                    <h2 className="text-sm font-bold text-blue-400 uppercase tracking-wider mb-4">Verification Info</h2>
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                        {vendor.verificationRequestedAt && (<><dt className="text-blue-600/70 dark:text-blue-300/70 font-medium">Requested At</dt><dd className="text-gray-900 dark:text-white font-medium">{format(new Date(vendor.verificationRequestedAt), "MMM d, yyyy 'at' h:mm a")}</dd></>)}
+                        {vendor.verifiedAt && (<><dt className="text-blue-600/70 dark:text-blue-300/70 font-medium">Verified At</dt><dd className="text-gray-900 dark:text-white font-medium">{format(new Date(vendor.verifiedAt), "MMM d, yyyy 'at' h:mm a")}</dd></>)}
+                        {vendor.verificationNote && (<><dt className="text-blue-600/70 dark:text-blue-300/70 font-medium">Note</dt><dd className="text-gray-900 dark:text-white font-medium">{vendor.verificationNote}</dd></>)}
+                    </dl>
+                </div>
+            )}
+
+            {/* Social Links */}
+            {vendor.socialLinks && Object.keys(vendor.socialLinks).length > 0 && (
+                <CollapsibleSection title="Social Links">
+                    <ul className="space-y-2">
+                        {Object.entries(vendor.socialLinks).map(([platform, url]) => (
+                            <li key={platform} className="flex items-center gap-3 text-sm">
+                                <span className="text-slate-500 font-medium capitalize min-w-[100px]">{platform}</span>
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:text-brand-400 truncate font-medium transition-colors">{url}</a>
+                            </li>
+                        ))}
+                    </ul>
+                </CollapsibleSection>
+            )}
+
+            {/* Authorized Signatories */}
+            {vendor.authorizedSignatories && vendor.authorizedSignatories.length > 0 && (
+                <CollapsibleSection title={`Authorized Signatories (${vendor.authorizedSignatories.length})`}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {vendor.authorizedSignatories.map((s) => (
+                            <div key={s.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 p-4 space-y-2">
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white">{s.fullName}</h4>
+                                <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                                    {s.nationality && (<><dt className="text-slate-500">Nationality</dt><dd className="text-slate-600 dark:text-slate-300">{s.nationality}</dd></>)}
+                                    {s.legalDocType && (<><dt className="text-slate-500">Doc Type</dt><dd className="text-slate-600 dark:text-slate-300">{s.legalDocType.replace(/_/g, " ")}</dd></>)}
+                                    {s.legalDocNumber && (<><dt className="text-slate-500">Doc Number</dt><dd className="text-slate-600 dark:text-slate-300">{s.legalDocNumber}</dd></>)}
+                                    {s.mobile && (<><dt className="text-slate-500">Mobile</dt><dd className="text-slate-600 dark:text-slate-300">{s.mobile}</dd></>)}
+                                    {s.email && (<><dt className="text-slate-500">Email</dt><dd className="text-slate-600 dark:text-slate-300">{s.email}</dd></>)}
+                                    {s.gender && (<><dt className="text-slate-500">Gender</dt><dd className="text-slate-600 dark:text-slate-300">{s.gender}</dd></>)}
+                                </dl>
+                                {s.idFileUrl && (
+                                    <a href={s.idFileUrl.startsWith("/") ? `${API}${s.idFileUrl}` : s.idFileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-brand-500 hover:text-brand-400 transition-colors">
+                                        View ID Document
+                                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+                                    </a>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
+
+            {/* Company Contacts */}
+            {vendor.companyContacts && vendor.companyContacts.length > 0 && (
+                <CollapsibleSection title={`Company Contacts (${vendor.companyContacts.length})`}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {vendor.companyContacts.map((c) => (
+                            <div key={c.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 p-4 space-y-2">
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white">{c.contactPersonName || "Contact"}</h4>
+                                <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                                    {c.mobile && (<><dt className="text-slate-500">Mobile</dt><dd className="text-slate-600 dark:text-slate-300">{c.mobile}</dd></>)}
+                                    {c.email && (<><dt className="text-slate-500">Email</dt><dd className="text-slate-600 dark:text-slate-300">{c.email}</dd></>)}
+                                    {c.phone && (<><dt className="text-slate-500">Phone</dt><dd className="text-slate-600 dark:text-slate-300">{c.phone}</dd></>)}
+                                    {c.fax && (<><dt className="text-slate-500">Fax</dt><dd className="text-slate-600 dark:text-slate-300">{c.fax}</dd></>)}
+                                    {c.website && (<><dt className="text-slate-500">Website</dt><dd className="text-brand-500 truncate"><a href={c.website} target="_blank" rel="noopener noreferrer">{c.website}</a></dd></>)}
+                                </dl>
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
+
+            {/* Department Contacts */}
+            {vendor.departmentContacts && vendor.departmentContacts.length > 0 && (
+                <CollapsibleSection title={`Department Contacts (${vendor.departmentContacts.length})`}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {vendor.departmentContacts.map((dc) => (
+                            <div key={dc.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 p-4 space-y-2">
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white">{dc.department.replace(/_/g, " ")}</h4>
+                                <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                                    {dc.contactName && (<><dt className="text-slate-500">Contact</dt><dd className="text-slate-600 dark:text-slate-300">{dc.contactName}</dd></>)}
+                                    {dc.mobile && (<><dt className="text-slate-500">Mobile</dt><dd className="text-slate-600 dark:text-slate-300">{dc.mobile}</dd></>)}
+                                    {dc.phone && (<><dt className="text-slate-500">Phone</dt><dd className="text-slate-600 dark:text-slate-300">{dc.phone}</dd></>)}
+                                    {dc.email && (<><dt className="text-slate-500">Email</dt><dd className="text-slate-600 dark:text-slate-300">{dc.email}</dd></>)}
+                                    {dc.fax && (<><dt className="text-slate-500">Fax</dt><dd className="text-slate-600 dark:text-slate-300">{dc.fax}</dd></>)}
+                                </dl>
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
+
+            {/* Banking Information */}
+            {vendor.bankingInfo && vendor.bankingInfo.length > 0 && (
+                <CollapsibleSection title={`Banking Information (${vendor.bankingInfo.length})`}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {vendor.bankingInfo.map((bi) => (
+                            <div key={bi.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 p-4 space-y-2">
+                                <h4 className="text-sm font-bold text-gray-900 dark:text-white">{bi.bankName || "Bank Account"}</h4>
+                                <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                                    {bi.bankBranch && (<><dt className="text-slate-500">Branch</dt><dd className="text-slate-600 dark:text-slate-300">{bi.bankBranch}</dd></>)}
+                                    {bi.accountNumber && (<><dt className="text-slate-500">Account #</dt><dd className="text-slate-600 dark:text-slate-300 font-mono">{maskString(bi.accountNumber)}</dd></>)}
+                                    {bi.iban && (<><dt className="text-slate-500">IBAN</dt><dd className="text-slate-600 dark:text-slate-300 font-mono">{maskString(bi.iban)}</dd></>)}
+                                    {bi.swiftCode && (<><dt className="text-slate-500">SWIFT</dt><dd className="text-slate-600 dark:text-slate-300">{bi.swiftCode}</dd></>)}
+                                    {bi.accountantManagerName && (<><dt className="text-slate-500">Accountant</dt><dd className="text-slate-600 dark:text-slate-300">{bi.accountantManagerName}</dd></>)}
+                                    {bi.cliq && (<><dt className="text-slate-500">CliQ</dt><dd className="text-slate-600 dark:text-slate-300">{bi.cliq}</dd></>)}
+                                </dl>
+                                {bi.signatureUrl && (
+                                    <a href={bi.signatureUrl.startsWith("/") ? `${API}${bi.signatureUrl}` : bi.signatureUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-brand-500 hover:text-brand-400 transition-colors">
+                                        View Signature
+                                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+                                    </a>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
+
             {/* Branches List */}
             {vendor.branches.length > 0 && (
-                <div className="rounded-2xl bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Branches ({vendor.branches.length})</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         {vendor.branches.map((b) => (
                             <Link
                                 key={b.id}
                                 href={`/admin/branches/${b.id}`}
-                                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 p-4 hover:border-brand-500/50 transition-all group"
+                                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 p-4 hover:border-brand-500/50 transition-all group"
                             >
                                 <div className="flex items-center justify-between mb-2">
                                     <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-brand-500 transition-colors">{b.name}</h3>
@@ -252,16 +416,16 @@ export default function AdminVendorDetailPage() {
             {/* Rejection Modal */}
             {rejectModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setRejectModalOpen(false)}>
-                    <div className="w-full max-w-md rounded-3xl bg-dark-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                    <div className="w-full max-w-md rounded-3xl bg-white dark:bg-dark-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Reject Vendor</h3>
                         <p className="text-sm font-medium text-slate-500 mb-6">Provide a reason. The vendor will see this.</p>
                         <textarea
                             rows={4} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
-                            className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-850 focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors resize-none"
+                            className="block w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-850 focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors resize-none"
                             placeholder="e.g. Photos do not meet requirements..." autoFocus
                         />
                         <div className="mt-6 flex justify-end gap-4">
-                            <button onClick={() => setRejectModalOpen(false)} className="rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-bold text-gray-900 dark:text-white bg-dark-850 hover:bg-dark-800 transition-colors">Cancel</button>
+                            <button onClick={() => setRejectModalOpen(false)} className="rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-bold text-gray-900 dark:text-white bg-white dark:bg-dark-850 hover:bg-slate-100 dark:hover:bg-dark-800 transition-colors">Cancel</button>
                             <button onClick={confirmReject} disabled={!rejectReason.trim()} className="rounded-xl px-6 py-3 text-sm font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors">Reject</button>
                         </div>
                     </div>

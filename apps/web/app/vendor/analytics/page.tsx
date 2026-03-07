@@ -54,7 +54,7 @@ export default function VendorAnalyticsPage() {
 
             {/* Booking Status Breakdown + Popular Services */}
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Booking Status</h2>
                     {data?.byStatus?.length > 0 ? (
                         <DonutChart
@@ -70,12 +70,12 @@ export default function VendorAnalyticsPage() {
                 </div>
 
                 {/* Popular Services */}
-                <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Popular Services</h2>
                     {data?.popularServices?.length > 0 ? (
                         <div className="space-y-4">
                             {data.popularServices.slice(0, 8).map((s: any, i: number) => (
-                                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-dark-850 border border-slate-200 dark:border-slate-800 transition-colors hover:border-brand-500/30">
+                                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-800 transition-colors hover:border-brand-500/30">
                                     <div className="flex items-center gap-3 min-w-0">
                                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-500/10 text-xs font-bold text-brand-500 shrink-0">{i + 1}</span>
                                         <span className="text-sm font-bold text-gray-900 dark:text-white truncate">{s.name}</span>
@@ -90,7 +90,7 @@ export default function VendorAnalyticsPage() {
             </div>
 
             {/* Daily Bookings */}
-            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Daily Bookings (Recent)</h2>
                 {data?.daily?.length > 0 ? (
                     <BarChart
@@ -103,7 +103,7 @@ export default function VendorAnalyticsPage() {
 
             {/* Service Type Distribution */}
             {data?.popularServices?.length > 0 && (
-                <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Service Type Distribution</h2>
                     <DonutChart
                         data={(() => {
@@ -124,7 +124,7 @@ export default function VendorAnalyticsPage() {
             )}
 
             {/* Peak Hours */}
-            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Peak Hours</h2>
                 {data?.peakHours?.length > 0 ? (
                     <div className="flex flex-wrap gap-3">

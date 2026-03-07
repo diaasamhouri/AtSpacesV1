@@ -194,7 +194,7 @@ export default function ProfilePage() {
         )}
 
         {/* Profile card */}
-        <div className="mt-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-dark-900 p-8 shadow-float">
+        <div className="mt-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-8 shadow-float">
           {/* Avatar & name */}
           <div className="flex items-center gap-4">
             <label className="relative cursor-pointer group">
@@ -225,7 +225,7 @@ export default function ProfilePage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your name"
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
                 />
               ) : (
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -264,7 +264,7 @@ export default function ProfilePage() {
                     setName(profile.name || "");
                   }}
                   disabled={saving}
-                  className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors"
+                  className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors"
                 >
                   Cancel
                 </button>
@@ -282,7 +282,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setEditing(true)}
-                  className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors"
+                  className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors"
                 >
                   Edit Profile
                 </button>
@@ -300,11 +300,11 @@ export default function ProfilePage() {
 
         {/* Vendor info */}
         {profile.vendorProfile && (
-          <div className="mt-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-dark-900 p-8 shadow-float">
+          <div className="mt-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-8 shadow-float">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white">
               Vendor Details
             </h3>
-            <div className="mt-6 space-y-4 text-sm bg-dark-850 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <div className="mt-6 space-y-4 text-sm bg-slate-50 dark:bg-dark-850 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
               <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-4">
                 <span className="text-slate-500 dark:text-slate-400 font-medium">Company</span>
                 <span className="font-bold text-gray-900 dark:text-white">
@@ -343,11 +343,11 @@ export default function ProfilePage() {
         )}
 
         {/* Account info */}
-        <div className="mt-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-dark-900 p-8 shadow-float">
+        <div className="mt-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-8 shadow-float">
           <h3 className="text-xl font-bold text-gray-900 dark:text-white">
             Account Facts
           </h3>
-          <div className="mt-6 space-y-4 text-sm bg-dark-850 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <div className="mt-6 space-y-4 text-sm bg-slate-50 dark:bg-dark-850 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
             <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-4">
               <span className="text-slate-500 dark:text-slate-400 font-medium">Role</span>
               <span className="font-bold text-gray-900 dark:text-white">
@@ -388,7 +388,7 @@ export default function ProfilePage() {
           <button
             type="button"
             onClick={() => router.push("/bookings")}
-            className="group flex w-full items-center justify-between rounded-3xl border border-slate-200 dark:border-slate-800 bg-dark-900 p-6 text-left transition-all hover:border-brand-500/50 hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:-translate-y-1"
+            className="group flex w-full items-center justify-between rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-6 text-left transition-all hover:border-brand-500/50 hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:-translate-y-1"
           >
             <span className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-brand-500 transition-colors">
               My Historic Bookings

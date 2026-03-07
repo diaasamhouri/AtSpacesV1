@@ -12,13 +12,15 @@ export default function VendorBranches() {
     const [branches, setBranches] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [unitTypeFilter, setUnitTypeFilter] = useState("");
 
     useEffect(() => {
         if (!token) return;
-        getVendorBranches(token)
+        setLoading(true);
+        getVendorBranches(token, { unitType: unitTypeFilter || undefined })
             .then((res) => { setBranches(res.data); setLoading(false); })
             .catch(() => { setError("Failed to load branches."); setLoading(false); });
-    }, [token]);
+    }, [token, unitTypeFilter]);
 
     if (loading) {
         return (
@@ -36,20 +38,33 @@ export default function VendorBranches() {
                 </div>
             )}
             <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Branches & Services</h1>
-                <Link href="/vendor/branches/new" className="rounded-xl bg-brand-500 active:scale-95 px-6 py-3 text-sm font-bold text-white hover:bg-brand-600 hover:-translate-y-0.5 shadow-[0_4px_12px_rgba(255,91,4,0.3)] transition-all">
-                    Add New Branch
-                </Link>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Branches & Units</h1>
+                <div className="flex items-center gap-3">
+                    <select
+                        value={unitTypeFilter}
+                        onChange={(e) => setUnitTypeFilter(e.target.value)}
+                        className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-3 py-2.5 text-sm text-gray-900 dark:text-white"
+                    >
+                        <option value="">All Unit Types</option>
+                        <option value="HOT_DESK">Hot Desk</option>
+                        <option value="PRIVATE_OFFICE">Private Office</option>
+                        <option value="MEETING_ROOM">Meeting Room</option>
+                        <option value="EVENT_SPACE">Event Space</option>
+                    </select>
+                    <Link href="/vendor/branches/new" className="rounded-xl bg-brand-500 active:scale-95 px-6 py-3 text-sm font-bold text-white hover:bg-brand-600 hover:-translate-y-0.5 shadow-[0_4px_12px_rgba(255,91,4,0.3)] transition-all">
+                        Add New Branch
+                    </Link>
+                </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl bg-dark-900 shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="overflow-hidden rounded-2xl bg-white dark:bg-dark-900 shadow-float border border-slate-200 dark:border-slate-800">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-800">
-                        <thead className="bg-dark-850">
+                        <thead className="bg-slate-50 dark:bg-dark-850">
                             <tr>
                                 <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Branch Name</th>
                                 <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">City / Address</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Services</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Units</th>
                                 <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                                 <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                             </tr>
@@ -63,7 +78,7 @@ export default function VendorBranches() {
                                 </tr>
                             ) : (
                                 branches.map((branch) => (
-                                    <tr key={branch.id} className="even:bg-dark-850/30 hover:bg-gray-50 dark:hover:bg-dark-850/60 transition-colors">
+                                    <tr key={branch.id} className="even:bg-slate-50/30 dark:even:bg-dark-850/30 hover:bg-gray-50 dark:hover:bg-dark-850/60 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="text-sm font-bold text-gray-900 dark:text-white">{branch.name}</div>
                                         </td>
@@ -75,12 +90,12 @@ export default function VendorBranches() {
                                             <div className="flex flex-wrap gap-2">
                                                 {branch.services?.length > 0 ? (
                                                     branch.services.map((s: any) => (
-                                                        <span key={s.id} className="inline-flex rounded-md tracking-wider bg-brand-500/10 border border-brand-500/20 px-2.5 py-1 text-[10px] font-bold text-brand-400">
-                                                            {formatServiceType(s.type)}
+                                                        <span key={s.id} className="inline-flex items-center gap-1 rounded-md tracking-wider bg-brand-500/10 border border-brand-500/20 px-2.5 py-1 text-[10px] font-bold text-brand-400">
+                                                            {s.name}{s.unitNumber ? ` (${s.unitNumber})` : ""} — {formatServiceType(s.type)}
                                                         </span>
                                                     ))
                                                 ) : (
-                                                    <span className="text-xs font-medium text-slate-500">No services</span>
+                                                    <span className="text-xs font-medium text-slate-500">No units</span>
                                                 )}
                                             </div>
                                         </td>

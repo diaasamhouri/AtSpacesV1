@@ -52,6 +52,12 @@ enum PricingInterval {
   MONTHLY
 }
 
+enum PricingMode {
+  PER_BOOKING
+  PER_PERSON
+  PER_HOUR
+}
+
 enum BookingStatus {
   PENDING
   PENDING_APPROVAL
@@ -60,6 +66,8 @@ enum BookingStatus {
   COMPLETED
   NO_SHOW
   CANCELLED
+  REJECTED
+  EXPIRED
 }
 
 enum PaymentMethod {
@@ -100,31 +108,134 @@ enum NotificationType {
   GENERAL
 }
 
+enum QuotationStatus {
+  NOT_SENT
+  SENT
+  ACCEPTED
+  REJECTED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum EntityType {
+  COMPANY
+  INDIVIDUAL
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum LegalDocType {
+  NATIONAL_ID
+  PASSPORT
+}
+
+enum CustomerClassification {
+  LEVEL_0
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+  LEVEL_4
+  LEVEL_5
+  LEVEL_6
+}
+
+enum EntityRoleName {
+  OPERATOR
+  LESSOR
+  OWNER
+  EMPLOYEE
+  MAINTENANCE
+  RECEPTION
+  TENANT
+  LEGAL
+  BOOKING
+  CUSTOMER_CARE
+}
+
+enum DepartmentType {
+  FINANCE
+  LEGAL
+  OPERATIONS
+  MARKETING
+  HR
+  IT
+  SALES
+  CUSTOMER_SERVICE
+}
+
+enum RoomShape {
+  L_SHAPE
+  U_SHAPE
+  RECTANGLE
+  SQUARE
+  OVAL
+  CUSTOM
+}
+
+enum SetupType {
+  CLASSROOM
+  THEATER
+  BOARDROOM
+  U_SHAPE_SEATING
+  HOLLOW_SQUARE
+  BANQUET
+}
+
+enum DiscountType {
+  NONE
+  PERCENTAGE
+  FIXED
+  PROMO_CODE
+}
+
 // ==================== AUTH MODELS ====================
 
 model User {
-  id            String    @id @default(uuid())
-  email         String?   @unique
-  emailVerified DateTime?
-  phone         String?   @unique
-  passwordHash  String?
-  name          String?
-  image         String?
-  role          Role      @default(CUSTOMER)
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                     String                  @id @default(uuid())
+  email                  String?                 @unique
+  emailVerified          DateTime?
+  phone                  String?                 @unique
+  passwordHash           String?
+  name                   String?
+  image                  String?
+  role                   Role                    @default(CUSTOMER)
+  isActive               Boolean                 @default(true)
+  // Phase 8: Entity enhancements
+  entityType             EntityType?
+  nationality            String?
+  gender                 Gender?
+  preferredLanguage      String?                 @default("en")
+  legalDocType           LegalDocType?
+  legalDocNumber         String?
+  alternativeMobile      String?
+  customerClassification CustomerClassification?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   // Relations
-  accounts       Account[]
-  sessions       Session[]
-  vendorProfile  VendorProfile?
-  bookings       Booking[]
-  notifications  Notification[]
-  otpCodes       OtpCode[]
-  reviews        Review[]
-  favorites      Favorite[]
-  adminAuditLogs AdminAuditLog[]
+  accounts              Account[]
+  sessions              Session[]
+  vendorProfile         VendorProfile?
+  bookings              Booking[]
+  notifications         Notification[]
+  otpCodes              OtpCode[]
+  reviews               Review[]
+  favorites             Favorite[]
+  adminAuditLogs        AdminAuditLog[]
+  paymentLogs           PaymentLog[]            @relation("PaymentLogPerformer")
+  customerQuotations    Quotation[]             @relation("CustomerQuotations")
+  createdQuotations     Quotation[]             @relation("QuotationCreatedBy")
+  invoices              Invoice[]
+  entityRoles           UserEntityRole[]
 
   @@index([email])
   @@index([phone])
@@ -193,15 +304,35 @@ model VendorProfile {
   status           VendorStatus @default(PENDING_APPROVAL)
   isVerified       Boolean      @default(false)
   verifiedAt       DateTime?
-  verificationNote String?
+  verificationNote        String?
+  verificationRequestedAt DateTime?
   commissionRate   Float?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  // Phase 8: Company enhancements
+  companyLegalName          String?
+  companyShortName          String?
+  companyTradeName          String?
+  companyNationalId         String?
+  companyRegistrationNumber String?
+  companyRegistrationDate   DateTime?
+  companySalesTaxNumber     String?
+  registeredInCountry       String?
+  hasTaxExemption           Boolean  @default(false)
+  companyDescription        String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  branches         Branch[]
-  promoCodes       PromoCode[]
-  approvalRequests ApprovalRequest[]
+  taxRate              Decimal   @default(16.00) @db.Decimal(5, 2)
+  taxEnabled           Boolean   @default(true)
+
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branches             Branch[]
+  promoCodes           PromoCode[]
+  approvalRequests     ApprovalRequest[]
+  authorizedSignatories AuthorizedSignatory[]
+  companyContacts      CompanyContact[]
+  departmentContacts   DepartmentContact[]
+  bankingInfo          BankingInfo[]
+  addOns               VendorAddOn[]
 
   @@index([status])
 }
@@ -223,6 +354,11 @@ model Branch {
   googleMapsUrl      String?
   autoAcceptBookings Boolean      @default(true)
   status             BranchStatus @default(ACTIVE)
+  // Phase 9: Property enhancements
+  grossArea          Decimal?     @db.Decimal(10, 2)
+  receptionMobile    String?
+  receptionEmail     String?
+  profileUrl         String?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -233,6 +369,7 @@ model Branch {
   reviews          Review[]
   favorites        Favorite[]
   promoCodes       PromoCode[]
+  quotations       Quotation[]
 
   @@index([vendorProfileId])
   @@index([city])
@@ -246,30 +383,57 @@ model Service {
   branchId    String
   type        ServiceType
   name        String // e.g. "Hot Desk Area A", "Office Room 3"
+  unitNumber  String? // e.g. "Room 3", "A-101"
   description String?
-  capacity    Int // Total seats/rooms available
+  capacity    Int? // Legacy/fallback capacity; prefer setupConfigs for min/max per setup
   isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  // Phase 9: Unit detail enhancements
+  profileNameEn String?
+  profileNameAr String?
+  weight        Int?
+  netSize       Decimal?  @db.Decimal(10, 2)
+  floor         String?
+  shape         RoomShape?
+  features      String[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  branch   Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  pricing  ServicePricing[]
-  bookings Booking[]
+  branch       Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  pricing      ServicePricing[]
+  setupConfigs ServiceSetupConfig[]
+  bookings     Booking[]
+  quotations   Quotation[]
 
   @@index([branchId])
   @@index([type])
   @@index([branchId, type])
 }
 
-model ServicePricing {
-  id        String          @id @default(uuid())
+model ServiceSetupConfig {
+  id        String    @id @default(uuid())
   serviceId String
-  interval  PricingInterval
-  price     Decimal         @db.Decimal(10, 3) // JOD supports 3 decimal places (fils)
-  currency  String          @default("JOD")
-  isActive  Boolean         @default(true)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  setupType SetupType
+  minPeople Int       @default(1)
+  maxPeople Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, setupType])
+  @@index([serviceId])
+}
+
+model ServicePricing {
+  id          String          @id @default(uuid())
+  serviceId   String
+  interval    PricingInterval
+  pricingMode PricingMode     @default(PER_BOOKING)
+  price       Decimal         @db.Decimal(10, 3) // JOD supports 3 decimal places (fils)
+  currency    String          @default("JOD")
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
@@ -280,31 +444,52 @@ model ServicePricing {
 // ==================== BOOKINGS & PAYMENTS ====================
 
 model Booking {
-  id             String        @id @default(uuid())
-  userId         String
-  branchId       String
-  serviceId      String
-  status         BookingStatus @default(PENDING)
-  startTime      DateTime
-  endTime        DateTime
-  numberOfPeople Int           @default(1)
-  totalPrice     Decimal       @db.Decimal(10, 3)
-  currency       String        @default("JOD")
-  notes          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                   String        @id @default(uuid())
+  userId               String
+  branchId             String
+  serviceId            String
+  status               BookingStatus @default(PENDING)
+  startTime            DateTime
+  endTime              DateTime
+  numberOfPeople       Int           @default(1)
+  totalPrice           Decimal       @db.Decimal(10, 3)
+  currency             String        @default("JOD")
+  notes                String?
+  requestedSetup       SetupType?
+  // Phase 3: Status view enhancements
+  archivedAt           DateTime?
+  salesApproved        Boolean       @default(false)
+  accountantApproved   Boolean       @default(false)
+  // Financial fields
+  pricingInterval      PricingInterval?
+  unitPrice            Decimal?      @db.Decimal(10, 3)
+  subtotal             Decimal?      @db.Decimal(10, 3)
+  discountType         DiscountType  @default(NONE)
+  discountValue        Decimal?      @db.Decimal(10, 3)
+  discountAmount       Decimal?      @db.Decimal(10, 3)
+  taxRate              Decimal?      @db.Decimal(5, 2)
+  taxAmount            Decimal?      @db.Decimal(10, 3)
+  promoCodeId          String?
+  bookingGroupId       String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  branch  Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  service Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  payment Payment?
-  review  Review?
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch    Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  service   Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  payment   Payment?
+  review    Review?
+  quotation Quotation?
+  invoices  Invoice[]
+  addOns    BookingAddOn[]
+  promoCode PromoCode?    @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([branchId])
   @@index([serviceId])
   @@index([status])
   @@index([startTime, endTime])
+  @@index([bookingGroupId])
 }
 
 model Payment {
@@ -319,10 +504,91 @@ model Payment {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking     Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  paymentLogs PaymentLog[]
 
   @@index([status])
   @@index([transactionId])
+}
+
+model PaymentLog {
+  id            String   @id @default(uuid())
+  paymentId     String
+  action        String   // COLLECTED, REFUNDED, CREATED
+  performedById String
+  receiptNumber String?
+  notes         String?
+  details       String?  // System-generated detail string
+  createdAt     DateTime @default(now())
+
+  payment     Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  performedBy User    @relation("PaymentLogPerformer", fields: [performedById], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([performedById])
+}
+
+// ==================== QUOTATIONS ====================
+
+model Quotation {
+  id              String          @id @default(uuid())
+  referenceNumber String          @unique
+  customerId      String
+  customer        User            @relation("CustomerQuotations", fields: [customerId], references: [id])
+  branchId        String
+  branch          Branch          @relation(fields: [branchId], references: [id])
+  serviceId       String
+  service         Service         @relation(fields: [serviceId], references: [id])
+  startTime       DateTime
+  endTime         DateTime
+  numberOfPeople  Int             @default(1)
+  totalAmount     Decimal         @db.Decimal(10, 2)
+  status          QuotationStatus @default(NOT_SENT)
+  notes           String?
+  sentAt          DateTime?
+  createdById     String
+  createdBy       User            @relation("QuotationCreatedBy", fields: [createdById], references: [id])
+  bookingId       String?         @unique
+  booking         Booking?        @relation(fields: [bookingId], references: [id])
+  // Financial fields
+  subtotal        Decimal?        @db.Decimal(10, 3)
+  discountType    DiscountType    @default(NONE)
+  discountValue   Decimal?        @db.Decimal(10, 3)
+  discountAmount  Decimal?        @db.Decimal(10, 3)
+  taxRate         Decimal?        @db.Decimal(5, 2)
+  taxAmount       Decimal?        @db.Decimal(10, 3)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  lineItems       QuotationLineItem[]
+
+  @@index([customerId])
+  @@index([branchId])
+  @@index([status])
+}
+
+// ==================== INVOICES ====================
+
+model Invoice {
+  id            String        @id @default(uuid())
+  invoiceNumber String        @unique
+  bookingId     String
+  booking       Booking       @relation(fields: [bookingId], references: [id])
+  customerId    String
+  customer      User          @relation(fields: [customerId], references: [id])
+  amount        Decimal       @db.Decimal(10, 2)
+  taxAmount     Decimal       @default(0) @db.Decimal(10, 2)
+  totalAmount   Decimal       @db.Decimal(10, 2)
+  status        InvoiceStatus @default(DRAFT)
+  issuedAt      DateTime?
+  dueDate       DateTime?
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([customerId])
+  @@index([bookingId])
+  @@index([status])
 }
 
 // ==================== APPROVAL SYSTEM ====================
@@ -423,6 +689,8 @@ model PromoCode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  bookings  Booking[]
+
   @@index([vendorProfileId])
   @@index([code])
 }
@@ -443,4 +711,151 @@ model AdminAuditLog {
   createdAt DateTime @default(now())
 
   admin User @relation(fields: [adminId], references: [id], onDelete: Cascade)
+}
+
+// ==================== ENTITY MANAGEMENT (Phase 8) ====================
+
+model EntityRole {
+  id    String         @id @default(uuid())
+  name  EntityRoleName @unique
+  users UserEntityRole[]
+}
+
+model UserEntityRole {
+  id           String     @id @default(uuid())
+  userId       String
+  entityRoleId String
+  createdAt    DateTime   @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityRole EntityRole @relation(fields: [entityRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityRoleId])
+  @@index([userId])
+}
+
+model AuthorizedSignatory {
+  id              String       @id @default(uuid())
+  vendorProfileId String
+  fullName        String
+  nationality     String?
+  legalDocType    LegalDocType?
+  legalDocNumber  String?
+  mobile          String?
+  email           String?
+  gender          Gender?
+  idFileUrl       String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  vendorProfile VendorProfile @relation(fields: [vendorProfileId], references: [id], onDelete: Cascade)
+
+  @@index([vendorProfileId])
+}
+
+model CompanyContact {
+  id              String  @id @default(uuid())
+  vendorProfileId String
+  contactPersonName String?
+  mobile          String?
+  email           String?
+  website         String?
+  phone           String?
+  fax             String?
+  logoUrl         String?
+  profileFileUrl  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  vendorProfile VendorProfile @relation(fields: [vendorProfileId], references: [id], onDelete: Cascade)
+
+  @@index([vendorProfileId])
+}
+
+model DepartmentContact {
+  id              String         @id @default(uuid())
+  vendorProfileId String
+  department      DepartmentType
+  contactName     String?
+  mobile          String?
+  phone           String?
+  email           String?
+  fax             String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  vendorProfile VendorProfile @relation(fields: [vendorProfileId], references: [id], onDelete: Cascade)
+
+  @@index([vendorProfileId])
+}
+
+model BankingInfo {
+  id                    String  @id @default(uuid())
+  vendorProfileId       String
+  bankName              String?
+  bankBranch            String?
+  accountNumber         String?
+  iban                  String?
+  swiftCode             String?
+  accountantManagerName String?
+  cliq                  String?
+  signatureUrl          String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  vendorProfile VendorProfile @relation(fields: [vendorProfileId], references: [id], onDelete: Cascade)
+
+  @@index([vendorProfileId])
+}
+
+// ==================== VENDOR ADD-ONS ====================
+
+model VendorAddOn {
+  id              String        @id @default(uuid())
+  vendorProfileId String
+  name            String
+  nameAr          String?
+  unitPrice       Decimal       @db.Decimal(10, 3)
+  currency        String        @default("JOD")
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  vendorProfile   VendorProfile @relation(fields: [vendorProfileId], references: [id], onDelete: Cascade)
+  bookingAddOns   BookingAddOn[]
+
+  @@index([vendorProfileId])
+}
+
+model BookingAddOn {
+  id            String       @id @default(uuid())
+  bookingId     String
+  vendorAddOnId String?
+  name          String
+  unitPrice     Decimal      @db.Decimal(10, 3)
+  quantity      Int          @default(1)
+  totalPrice    Decimal      @db.Decimal(10, 3)
+  serviceTime   String?
+  comments      String?
+  createdAt     DateTime     @default(now())
+
+  booking       Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  vendorAddOn   VendorAddOn? @relation(fields: [vendorAddOnId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+}
+
+model QuotationLineItem {
+  id          String    @id @default(uuid())
+  quotationId String
+  description String
+  unitPrice   Decimal   @db.Decimal(10, 3)
+  quantity    Int       @default(1)
+  totalPrice  Decimal   @db.Decimal(10, 3)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId])
 }

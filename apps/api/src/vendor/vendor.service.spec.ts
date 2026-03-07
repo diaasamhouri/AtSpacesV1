@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
 describe('VendorService', () => {
@@ -25,6 +26,8 @@ describe('VendorService', () => {
     isVerified: false,
     verifiedAt: null,
     commissionRate: null,
+    taxRate: new Decimal(16),
+    taxEnabled: true,
     createdAt: new Date('2026-01-01'),
   };
 
@@ -33,6 +36,14 @@ describe('VendorService', () => {
     id: 'vp-pending',
     userId: 'user-pending',
     status: 'PENDING_APPROVAL',
+  };
+
+  const mockRedisService = {
+    acquireLock: jest.fn(),
+    releaseLock: jest.fn(),
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
   };
 
   const mockPrismaService = {
@@ -70,6 +81,10 @@ describe('VendorService', () => {
     systemSettings: {
       findUnique: jest.fn(),
     },
+    paymentLog: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
@@ -77,6 +92,7 @@ describe('VendorService', () => {
       providers: [
         VendorService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
 
@@ -220,6 +236,16 @@ describe('VendorService', () => {
           socialLinks: true,
           status: true,
           isVerified: true,
+          companyLegalName: true,
+          companyShortName: true,
+          companyTradeName: true,
+          companyNationalId: true,
+          companyRegistrationNumber: true,
+          companyRegistrationDate: true,
+          companySalesTaxNumber: true,
+          registeredInCountry: true,
+          hasTaxExemption: true,
+          companyDescription: true,
         },
       });
     });

@@ -1,10 +1,20 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { buildPaginatedResponse } from '../common/helpers/paginate';
+import { CreateVendorBookingDto } from './dto/create-vendor-booking.dto';
+import { CreateVendorAddOnDto, UpdateVendorAddOnDto } from './dto/create-vendor-addon.dto';
+import { CreateCustomerDto } from './dto/create-customer.dto';
+import { ValidatePromoDto } from './dto/validate-promo.dto';
+import { randomUUID } from 'crypto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class VendorService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private redis: RedisService,
+    ) { }
 
     // ==================== HELPERS ====================
 
@@ -62,7 +72,16 @@ export class VendorService {
     // ==================== PROFILE ====================
 
     async getProfile(userId: string) {
-        const vp = await this.getVendorProfile(userId);
+        const vp = await this.prisma.vendorProfile.findUnique({
+            where: { userId },
+            include: {
+                authorizedSignatories: true,
+                companyContacts: true,
+                departmentContacts: true,
+                bankingInfo: true,
+            },
+        });
+        if (!vp) throw new NotFoundException('Vendor profile not found');
         return {
             id: vp.id,
             companyName: vp.companyName,
@@ -75,34 +94,177 @@ export class VendorService {
             status: vp.status,
             isVerified: vp.isVerified,
             verifiedAt: vp.verifiedAt,
+            verificationRequestedAt: vp.verificationRequestedAt,
+            companyLegalName: vp.companyLegalName,
+            companyShortName: vp.companyShortName,
+            companyTradeName: vp.companyTradeName,
+            companyNationalId: vp.companyNationalId,
+            companyRegistrationNumber: vp.companyRegistrationNumber,
+            companyRegistrationDate: vp.companyRegistrationDate,
+            companySalesTaxNumber: vp.companySalesTaxNumber,
+            registeredInCountry: vp.registeredInCountry,
+            hasTaxExemption: vp.hasTaxExemption,
+            companyDescription: vp.companyDescription,
+            authorizedSignatories: vp.authorizedSignatories,
+            companyContacts: vp.companyContacts,
+            departmentContacts: vp.departmentContacts,
+            bankingInfo: vp.bankingInfo,
             createdAt: vp.createdAt,
         };
     }
 
-    async updateProfile(userId: string, data: { companyName?: string; description?: string; phone?: string; website?: string; images?: string[]; socialLinks?: Record<string, string> }) {
+    async updateProfile(userId: string, data: {
+        companyName?: string; description?: string; phone?: string; website?: string;
+        images?: string[]; socialLinks?: Record<string, string>;
+        companyLegalName?: string; companyShortName?: string; companyTradeName?: string;
+        companyNationalId?: string; companyRegistrationNumber?: string; companyRegistrationDate?: string;
+        companySalesTaxNumber?: string; registeredInCountry?: string; hasTaxExemption?: boolean;
+        companyDescription?: string;
+    }) {
         const vp = await this.getVendorProfile(userId);
 
         if (vp.status === 'REJECTED') {
             throw new ForbiddenException('Cannot update a rejected vendor profile.');
         }
 
+        const updateData: Record<string, any> = {};
+        const fields = [
+            'companyName', 'description', 'phone', 'website', 'images', 'socialLinks',
+            'companyLegalName', 'companyShortName', 'companyTradeName', 'companyNationalId',
+            'companyRegistrationNumber', 'companySalesTaxNumber', 'registeredInCountry',
+            'hasTaxExemption', 'companyDescription',
+        ] as const;
+
+        for (const field of fields) {
+            if ((data as any)[field] !== undefined) {
+                updateData[field] = (data as any)[field];
+            }
+        }
+
+        if (data.companyRegistrationDate !== undefined) {
+            updateData.companyRegistrationDate = data.companyRegistrationDate ? new Date(data.companyRegistrationDate) : null;
+        }
+
         return this.prisma.vendorProfile.update({
             where: { id: vp.id },
-            data: {
-                ...(data.companyName !== undefined ? { companyName: data.companyName } : {}),
-                ...(data.description !== undefined ? { description: data.description } : {}),
-                ...(data.phone !== undefined ? { phone: data.phone } : {}),
-                ...(data.website !== undefined ? { website: data.website } : {}),
-                ...(data.images !== undefined ? { images: data.images } : {}),
-                ...(data.socialLinks !== undefined ? { socialLinks: data.socialLinks } : {}),
+            data: updateData,
+            select: {
+                id: true, companyName: true, description: true, phone: true, website: true,
+                images: true, socialLinks: true, status: true, isVerified: true,
+                companyLegalName: true, companyShortName: true, companyTradeName: true,
+                companyNationalId: true, companyRegistrationNumber: true, companyRegistrationDate: true,
+                companySalesTaxNumber: true, registeredInCountry: true, hasTaxExemption: true,
+                companyDescription: true,
             },
-            select: { id: true, companyName: true, description: true, phone: true, website: true, images: true, socialLinks: true, status: true, isVerified: true },
         });
+    }
+
+    // ==================== SIGNATORY CRUD ====================
+
+    async addSignatory(userId: string, dto: any) {
+        const vp = await this.getVendorProfile(userId);
+        return this.prisma.authorizedSignatory.create({
+            data: { vendorProfileId: vp.id, ...dto },
+        });
+    }
+
+    async updateSignatory(userId: string, id: string, dto: any) {
+        const vp = await this.getVendorProfile(userId);
+        const record = await this.prisma.authorizedSignatory.findFirst({ where: { id, vendorProfileId: vp.id } });
+        if (!record) throw new NotFoundException('Signatory not found');
+        return this.prisma.authorizedSignatory.update({ where: { id }, data: dto });
+    }
+
+    async deleteSignatory(userId: string, id: string) {
+        const vp = await this.getVendorProfile(userId);
+        const record = await this.prisma.authorizedSignatory.findFirst({ where: { id, vendorProfileId: vp.id } });
+        if (!record) throw new NotFoundException('Signatory not found');
+        await this.prisma.authorizedSignatory.delete({ where: { id } });
+        return { message: 'Signatory deleted' };
+    }
+
+    // ==================== COMPANY CONTACT CRUD ====================
+
+    async addCompanyContact(userId: string, dto: any) {
+        const vp = await this.getVendorProfile(userId);
+        return this.prisma.companyContact.create({
+            data: { vendorProfileId: vp.id, ...dto },
+        });
+    }
+
+    async updateCompanyContact(userId: string, id: string, dto: any) {
+        const vp = await this.getVendorProfile(userId);
+        const record = await this.prisma.companyContact.findFirst({ where: { id, vendorProfileId: vp.id } });
+        if (!record) throw new NotFoundException('Company contact not found');
+        return this.prisma.companyContact.update({ where: { id }, data: dto });
+    }
+
+    async deleteCompanyContact(userId: string, id: string) {
+        const vp = await this.getVendorProfile(userId);
+        const record = await this.prisma.companyContact.findFirst({ where: { id, vendorProfileId: vp.id } });
+        if (!record) throw new NotFoundException('Company contact not found');
+        await this.prisma.companyContact.delete({ where: { id } });
+        return { message: 'Company contact deleted' };
+    }
+
+    // ==================== DEPARTMENT CONTACT CRUD ====================
+
+    async addDepartmentContact(userId: string, dto: any) {
+        const vp = await this.getVendorProfile(userId);
+        return this.prisma.departmentContact.create({
+            data: { vendorProfileId: vp.id, ...dto },
+        });
+    }
+
+    async updateDepartmentContact(userId: string, id: string, dto: any) {
+        const vp = await this.getVendorProfile(userId);
+        const record = await this.prisma.departmentContact.findFirst({ where: { id, vendorProfileId: vp.id } });
+        if (!record) throw new NotFoundException('Department contact not found');
+        return this.prisma.departmentContact.update({ where: { id }, data: dto });
+    }
+
+    async deleteDepartmentContact(userId: string, id: string) {
+        const vp = await this.getVendorProfile(userId);
+        const record = await this.prisma.departmentContact.findFirst({ where: { id, vendorProfileId: vp.id } });
+        if (!record) throw new NotFoundException('Department contact not found');
+        await this.prisma.departmentContact.delete({ where: { id } });
+        return { message: 'Department contact deleted' };
+    }
+
+    // ==================== BANKING INFO CRUD ====================
+
+    async addBankingInfo(userId: string, dto: any) {
+        const vp = await this.getVendorProfile(userId);
+        return this.prisma.bankingInfo.create({
+            data: { vendorProfileId: vp.id, ...dto },
+        });
+    }
+
+    async updateBankingInfo(userId: string, id: string, dto: any) {
+        const vp = await this.getVendorProfile(userId);
+        const record = await this.prisma.bankingInfo.findFirst({ where: { id, vendorProfileId: vp.id } });
+        if (!record) throw new NotFoundException('Banking info not found');
+        return this.prisma.bankingInfo.update({ where: { id }, data: dto });
+    }
+
+    async deleteBankingInfo(userId: string, id: string) {
+        const vp = await this.getVendorProfile(userId);
+        const record = await this.prisma.bankingInfo.findFirst({ where: { id, vendorProfileId: vp.id } });
+        if (!record) throw new NotFoundException('Banking info not found');
+        await this.prisma.bankingInfo.delete({ where: { id } });
+        return { message: 'Banking info deleted' };
     }
 
     async requestVerification(userId: string) {
         const vp = await this.getApprovedVendorProfile(userId);
         if (vp.isVerified) return { message: 'Already verified', isVerified: true };
+        if (vp.verificationRequestedAt) return { message: 'Verification request already pending', isVerified: false };
+
+        // Mark the request timestamp
+        await this.prisma.vendorProfile.update({
+            where: { id: vp.id },
+            data: { verificationRequestedAt: new Date() },
+        });
 
         // Notify all admins about the verification request
         const admins = await this.prisma.user.findMany({ where: { role: 'ADMIN', isActive: true } });
@@ -359,6 +521,68 @@ export class VendorService {
         }));
     }
 
+    // ==================== DAY VIEW ====================
+
+    async getDayView(userId: string, date: string, branchId?: string) {
+        const vp = await this.getApprovedVendorProfile(userId);
+
+        const dayStart = new Date(`${date}T00:00:00.000Z`);
+        const dayEnd = new Date(`${date}T23:59:59.999Z`);
+
+        const branchFilter: any = { vendorProfileId: vp.id };
+        if (branchId) branchFilter.id = branchId;
+
+        const services = await this.prisma.service.findMany({
+            where: {
+                branch: branchFilter,
+                isActive: true,
+            },
+            include: {
+                branch: { select: { name: true } },
+                bookings: {
+                    where: {
+                        startTime: { lte: dayEnd },
+                        endTime: { gte: dayStart },
+                        status: { notIn: ['CANCELLED', 'REJECTED'] as any },
+                    },
+                    include: {
+                        user: { select: { name: true } },
+                    },
+                    orderBy: { startTime: 'asc' },
+                },
+            },
+            orderBy: { name: 'asc' },
+        });
+
+        return {
+            rooms: services.map(s => ({
+                id: s.id,
+                name: s.name,
+                branch: s.branch.name,
+                bookings: s.bookings.map(b => ({
+                    id: b.id,
+                    ref: b.id.slice(0, 8).toUpperCase(),
+                    startTime: b.startTime.toISOString(),
+                    endTime: b.endTime.toISOString(),
+                    customer: b.user.name,
+                    status: b.status,
+                })),
+            })),
+        };
+    }
+
+    // ==================== VENDOR BRANCHES ====================
+
+    async getVendorBranches(userId: string) {
+        const vp = await this.getApprovedVendorProfile(userId);
+
+        return this.prisma.branch.findMany({
+            where: { vendorProfileId: vp.id },
+            select: { id: true, name: true, city: true, status: true },
+            orderBy: { name: 'asc' },
+        });
+    }
+
     // ==================== PROMOTIONS ====================
 
     async createPromoCode(userId: string, data: { code: string; discountPercent: number; maxUses?: number; validUntil?: string; isActive?: boolean; branchId?: string }) {
@@ -438,5 +662,575 @@ export class VendorService {
 
         await this.prisma.promoCode.delete({ where: { id: promoId } });
         return { message: 'Promo code deleted' };
+    }
+
+    // ==================== COLLECT PAYMENT ====================
+
+    async collectPayment(vendorUserId: string, bookingId: string, options?: { receiptNumber?: string; notes?: string }) {
+        const vp = await this.getApprovedVendorProfile(vendorUserId);
+
+        const booking = await this.prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: {
+                payment: true,
+                branch: { select: { id: true, name: true, vendorProfileId: true } },
+                user: { select: { name: true } },
+            },
+        });
+
+        if (!booking) throw new NotFoundException('Booking not found');
+        if (booking.branch.vendorProfileId !== vp.id) throw new ForbiddenException('Booking does not belong to your branches');
+        if (!booking.payment) throw new BadRequestException('Booking has no payment record');
+        if (booking.payment.method !== 'CASH') throw new BadRequestException('Only cash payments can be collected');
+        if (booking.payment.status !== 'PENDING') throw new BadRequestException('Payment is not in pending status');
+
+        const [updatedPayment] = await this.prisma.$transaction([
+            this.prisma.payment.update({
+                where: { id: booking.payment.id },
+                data: { status: 'COMPLETED', paidAt: new Date() },
+            }),
+            this.prisma.paymentLog.create({
+                data: {
+                    paymentId: booking.payment.id,
+                    action: 'COLLECTED',
+                    performedById: vendorUserId,
+                    receiptNumber: options?.receiptNumber || null,
+                    notes: options?.notes || null,
+                    details: `Cash payment of ${booking.payment.amount} ${booking.payment.currency} collected for booking at ${booking.branch.name}`,
+                },
+            }),
+            this.prisma.notification.create({
+                data: {
+                    userId: booking.userId,
+                    type: 'GENERAL',
+                    title: 'Cash Payment Recorded',
+                    message: `Your cash payment at ${booking.branch.name} has been recorded.`,
+                    data: { bookingId: booking.id, branchId: booking.branch.id },
+                },
+            }),
+        ]);
+
+        return {
+            id: updatedPayment.id,
+            method: updatedPayment.method,
+            status: updatedPayment.status,
+            amount: updatedPayment.amount.toNumber(),
+            currency: updatedPayment.currency,
+            paidAt: updatedPayment.paidAt?.toISOString() ?? null,
+        };
+    }
+
+    async bulkCollectPayments(vendorUserId: string, bookingIds: string[], options?: { receiptNumber?: string; notes?: string }) {
+        const vp = await this.getApprovedVendorProfile(vendorUserId);
+
+        const bookings = await this.prisma.booking.findMany({
+            where: { id: { in: bookingIds } },
+            include: {
+                payment: true,
+                branch: { select: { id: true, name: true, vendorProfileId: true } },
+            },
+        });
+
+        // Validate all bookings
+        const errors: string[] = [];
+        for (const id of bookingIds) {
+            const booking = bookings.find(b => b.id === id);
+            if (!booking) { errors.push(`Booking ${id.slice(0, 8)} not found`); continue; }
+            if (booking.branch.vendorProfileId !== vp.id) { errors.push(`Booking ${id.slice(0, 8)} does not belong to your branches`); continue; }
+            if (!booking.payment) { errors.push(`Booking ${id.slice(0, 8)} has no payment record`); continue; }
+            if (booking.payment.method !== 'CASH') { errors.push(`Booking ${id.slice(0, 8)} is not a cash payment`); continue; }
+            if (booking.payment.status !== 'PENDING') { errors.push(`Booking ${id.slice(0, 8)} payment is not pending`); continue; }
+        }
+
+        if (errors.length > 0) {
+            throw new BadRequestException(errors.join('; '));
+        }
+
+        const now = new Date();
+        const operations: any[] = [];
+
+        for (const booking of bookings) {
+            operations.push(
+                this.prisma.payment.update({
+                    where: { id: booking.payment!.id },
+                    data: { status: 'COMPLETED', paidAt: now },
+                }),
+                this.prisma.paymentLog.create({
+                    data: {
+                        paymentId: booking.payment!.id,
+                        action: 'COLLECTED',
+                        performedById: vendorUserId,
+                        receiptNumber: options?.receiptNumber || null,
+                        notes: options?.notes || null,
+                        details: `Bulk collect: Cash payment of ${booking.payment!.amount} ${booking.payment!.currency} at ${booking.branch.name}`,
+                    },
+                }),
+                this.prisma.notification.create({
+                    data: {
+                        userId: booking.userId,
+                        type: 'GENERAL',
+                        title: 'Cash Payment Recorded',
+                        message: `Your cash payment at ${booking.branch.name} has been recorded.`,
+                        data: { bookingId: booking.id, branchId: booking.branch.id },
+                    },
+                }),
+            );
+        }
+
+        await this.prisma.$transaction(operations);
+
+        return { collected: bookings.length, bookingIds: bookings.map(b => b.id) };
+    }
+
+    async getPaymentLogs(vendorUserId: string, bookingId: string) {
+        const vp = await this.getApprovedVendorProfile(vendorUserId);
+
+        const booking = await this.prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: {
+                payment: true,
+                branch: { select: { vendorProfileId: true } },
+            },
+        });
+
+        if (!booking) throw new NotFoundException('Booking not found');
+        if (booking.branch.vendorProfileId !== vp.id) throw new ForbiddenException('Booking does not belong to your branches');
+        if (!booking.payment) throw new BadRequestException('Booking has no payment record');
+
+        const logs = await this.prisma.paymentLog.findMany({
+            where: { paymentId: booking.payment.id },
+            include: { performedBy: { select: { name: true, role: true } } },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        return logs.map(log => ({
+            id: log.id,
+            paymentId: log.paymentId,
+            action: log.action,
+            performedBy: { name: log.performedBy.name, role: log.performedBy.role },
+            receiptNumber: log.receiptNumber,
+            notes: log.notes,
+            details: log.details,
+            createdAt: log.createdAt.toISOString(),
+        }));
+    }
+
+    // ==================== CUSTOMER SEARCH ====================
+
+    async searchCustomers(userId: string, search: string, limit = 10) {
+        await this.getApprovedVendorProfile(userId);
+
+        if (!search || search.length < 2) {
+            return { data: [] };
+        }
+
+        const customers = await this.prisma.user.findMany({
+            where: {
+                role: 'CUSTOMER',
+                isActive: true,
+                OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { email: { contains: search, mode: 'insensitive' } },
+                    { phone: { contains: search } },
+                ],
+            },
+            select: { id: true, name: true, email: true, phone: true, entityType: true, customerClassification: true },
+            take: limit,
+        });
+
+        return { data: customers };
+    }
+
+    // ==================== VENDOR ADD-ONS ====================
+
+    async getAddOns(userId: string) {
+        const vp = await this.getApprovedVendorProfile(userId);
+        const addOns = await this.prisma.vendorAddOn.findMany({
+            where: { vendorProfileId: vp.id },
+            orderBy: { createdAt: 'desc' },
+        });
+        return addOns.map(a => ({
+            id: a.id,
+            name: a.name,
+            nameAr: a.nameAr,
+            unitPrice: a.unitPrice.toNumber(),
+            currency: a.currency,
+            isActive: a.isActive,
+            createdAt: a.createdAt.toISOString(),
+        }));
+    }
+
+    async createAddOn(userId: string, dto: CreateVendorAddOnDto) {
+        const vp = await this.getApprovedVendorProfile(userId);
+        const addOn = await this.prisma.vendorAddOn.create({
+            data: {
+                vendorProfileId: vp.id,
+                name: dto.name,
+                nameAr: dto.nameAr,
+                unitPrice: dto.unitPrice,
+            },
+        });
+        return { id: addOn.id, name: addOn.name, nameAr: addOn.nameAr, unitPrice: addOn.unitPrice.toNumber(), currency: addOn.currency, isActive: addOn.isActive };
+    }
+
+    async updateAddOn(userId: string, id: string, dto: UpdateVendorAddOnDto) {
+        const vp = await this.getApprovedVendorProfile(userId);
+        const addOn = await this.prisma.vendorAddOn.findUnique({ where: { id } });
+        if (!addOn || addOn.vendorProfileId !== vp.id) throw new NotFoundException('Add-on not found');
+        const updated = await this.prisma.vendorAddOn.update({
+            where: { id },
+            data: { name: dto.name, nameAr: dto.nameAr, unitPrice: dto.unitPrice, isActive: dto.isActive },
+        });
+        return { id: updated.id, name: updated.name, nameAr: updated.nameAr, unitPrice: updated.unitPrice.toNumber(), currency: updated.currency, isActive: updated.isActive };
+    }
+
+    async deleteAddOn(userId: string, id: string) {
+        const vp = await this.getApprovedVendorProfile(userId);
+        const addOn = await this.prisma.vendorAddOn.findUnique({ where: { id } });
+        if (!addOn || addOn.vendorProfileId !== vp.id) throw new NotFoundException('Add-on not found');
+        await this.prisma.vendorAddOn.update({ where: { id }, data: { isActive: false } });
+        return { message: 'Add-on deactivated' };
+    }
+
+    // ==================== CREATE CUSTOMER ====================
+
+    async createCustomer(userId: string, dto: CreateCustomerDto) {
+        await this.getApprovedVendorProfile(userId);
+
+        if (!dto.email && !dto.phone) {
+            throw new BadRequestException('At least one of email or phone is required');
+        }
+
+        // Check existing by email
+        if (dto.email) {
+            const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+            if (existing) {
+                return { id: existing.id, name: existing.name, email: existing.email, phone: existing.phone, entityType: existing.entityType, customerClassification: existing.customerClassification, isNew: false };
+            }
+        }
+
+        // Check existing by phone
+        if (dto.phone) {
+            const existing = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
+            if (existing) {
+                return { id: existing.id, name: existing.name, email: existing.email, phone: existing.phone, entityType: existing.entityType, customerClassification: existing.customerClassification, isNew: false };
+            }
+        }
+
+        const randomPassword = randomUUID();
+        const passwordHash = await bcrypt.hash(randomPassword, 10);
+
+        const user = await this.prisma.user.create({
+            data: {
+                name: dto.name,
+                email: dto.email || null,
+                phone: dto.phone || null,
+                role: 'CUSTOMER',
+                isActive: true,
+                passwordHash,
+                entityType: dto.entityType ?? 'INDIVIDUAL',
+            },
+        });
+
+        return { id: user.id, name: user.name, email: user.email, phone: user.phone, entityType: user.entityType, customerClassification: user.customerClassification, isNew: true };
+    }
+
+    // ==================== PROMO CODE VALIDATION ====================
+
+    async validatePromoCode(userId: string, dto: ValidatePromoDto) {
+        const vp = await this.getApprovedVendorProfile(userId);
+
+        const promo = await this.prisma.promoCode.findUnique({ where: { code: dto.code } });
+        if (!promo || promo.vendorProfileId !== vp.id) {
+            return { valid: false, discountPercent: 0, message: 'Promo code not found' };
+        }
+        if (!promo.isActive) {
+            return { valid: false, discountPercent: 0, message: 'Promo code is inactive' };
+        }
+        if (promo.validUntil && promo.validUntil < new Date()) {
+            return { valid: false, discountPercent: 0, message: 'Promo code has expired' };
+        }
+        if (promo.maxUses > 0 && promo.currentUses >= promo.maxUses) {
+            return { valid: false, discountPercent: 0, message: 'Promo code has reached maximum uses' };
+        }
+        if (dto.branchId && promo.branchId && promo.branchId !== dto.branchId) {
+            return { valid: false, discountPercent: 0, message: 'Promo code is not valid for this branch' };
+        }
+
+        return { valid: true, discountPercent: promo.discountPercent, message: 'Promo code is valid', promoCodeId: promo.id };
+    }
+
+    // ==================== VENDOR BOOKING CREATION ====================
+
+    async createBookingForCustomer(vendorUserId: string, dto: CreateVendorBookingDto) {
+        const vp = await this.getApprovedVendorProfile(vendorUserId);
+
+        // Validate branch belongs to vendor
+        const branch = await this.prisma.branch.findUnique({
+            where: { id: dto.branchId },
+            select: { id: true, name: true, status: true, vendorProfileId: true },
+        });
+        if (!branch || branch.vendorProfileId !== vp.id) {
+            throw new ForbiddenException('Branch does not belong to you');
+        }
+        if (branch.status !== 'ACTIVE') {
+            throw new BadRequestException('Branch is not currently active');
+        }
+
+        // Validate customer exists
+        const customer = await this.prisma.user.findUnique({ where: { id: dto.customerId } });
+        if (!customer || !customer.isActive) {
+            throw new BadRequestException('Customer not found or inactive');
+        }
+
+        if (!dto.days || dto.days.length === 0) {
+            throw new BadRequestException('At least one booking day is required');
+        }
+
+        const bookingGroupId = randomUUID();
+
+        // Resolve promo code if provided
+        let resolvedDiscountType = dto.discountType || 'NONE';
+        let resolvedDiscountValue = dto.discountValue || 0;
+        let promoCodeId: string | null = null;
+
+        if (dto.promoCode) {
+            const promoResult = await this.validatePromoCode(vendorUserId, { code: dto.promoCode, branchId: dto.branchId });
+            if (!promoResult.valid) {
+                throw new BadRequestException(promoResult.message);
+            }
+            resolvedDiscountType = 'PERCENTAGE';
+            resolvedDiscountValue = promoResult.discountPercent;
+            promoCodeId = promoResult.promoCodeId!;
+        }
+
+        // Determine tax
+        const subjectToTax = dto.subjectToTax ?? vp.taxEnabled;
+        const taxRate = subjectToTax ? vp.taxRate.toNumber() : 0;
+
+        // Compute aggregate subtotal
+        let aggregateSubtotal = 0;
+        const daySubtotals: number[] = [];
+
+        for (const day of dto.days) {
+            let daySubtotal = day.unitPrice || 0;
+
+            // Multiply by number of people if pricing mode is PER_PERSON
+            if (day.numberOfPeople && day.numberOfPeople > 1 && day.serviceId) {
+                const pricingRecord = day.pricingInterval
+                    ? await this.prisma.servicePricing.findFirst({
+                        where: { serviceId: day.serviceId, interval: day.pricingInterval as any, isActive: true },
+                    })
+                    : null;
+                if (pricingRecord?.pricingMode === 'PER_PERSON') {
+                    daySubtotal = daySubtotal * day.numberOfPeople;
+                }
+            }
+
+            if (day.addOns) {
+                for (const addOn of day.addOns) {
+                    const vendorAddOn = await this.prisma.vendorAddOn.findUnique({ where: { id: addOn.vendorAddOnId } });
+                    if (!vendorAddOn || vendorAddOn.vendorProfileId !== vp.id) {
+                        throw new BadRequestException(`Add-on ${addOn.vendorAddOnId} not found`);
+                    }
+                    daySubtotal += vendorAddOn.unitPrice.toNumber() * addOn.quantity;
+                }
+            }
+            daySubtotals.push(daySubtotal);
+            aggregateSubtotal += daySubtotal;
+        }
+
+        // Compute discount
+        let discountAmount = 0;
+        if (resolvedDiscountType === 'PERCENTAGE' && resolvedDiscountValue > 0) {
+            discountAmount = aggregateSubtotal * (resolvedDiscountValue / 100);
+        } else if (resolvedDiscountType === 'FIXED' && resolvedDiscountValue > 0) {
+            discountAmount = Math.min(resolvedDiscountValue, aggregateSubtotal);
+        }
+
+        // Compute tax
+        const taxableAmount = aggregateSubtotal - discountAmount;
+        const totalTax = subjectToTax ? taxableAmount * (taxRate / 100) : 0;
+        const grandTotal = taxableAmount + totalTax;
+
+        const createdBookings: any[] = [];
+
+        for (let i = 0; i < dto.days.length; i++) {
+            const day = dto.days[i]!;
+            const daySubtotal = daySubtotals[i]!;
+            const ratio = aggregateSubtotal > 0 ? daySubtotal / aggregateSubtotal : 1 / dto.days.length;
+            const dayDiscount = discountAmount * ratio;
+            const dayTax = totalTax * ratio;
+            const dayTotal = daySubtotal - dayDiscount + dayTax;
+
+            // Validate service for this day
+            const service = await this.prisma.service.findUnique({
+                where: { id: day.serviceId },
+                include: { setupConfigs: true, pricing: { where: { isActive: true } } },
+            });
+            if (!service || !service.isActive || service.branchId !== dto.branchId) {
+                throw new BadRequestException(`Service ${day.serviceId} not found or does not belong to branch`);
+            }
+
+            const numberOfPeople = day.numberOfPeople ?? 1;
+            const effectiveCapacity = service.setupConfigs.length > 0
+                ? Math.max(...service.setupConfigs.map(c => c.maxPeople))
+                : service.capacity ?? 0;
+
+            // Reject setup type for non-eligible service types
+            if (day.setupType && !['MEETING_ROOM', 'EVENT_SPACE'].includes(service.type)) {
+                throw new BadRequestException(
+                    `Setup type is only available for Meeting Room and Event Space (service: ${service.type})`,
+                );
+            }
+
+            if (day.setupType && service.setupConfigs.length > 0) {
+                const config = service.setupConfigs.find(c => c.setupType === day.setupType);
+                if (config && (numberOfPeople < config.minPeople || numberOfPeople > config.maxPeople)) {
+                    throw new BadRequestException(
+                        `Setup ${day.setupType} requires between ${config.minPeople} and ${config.maxPeople} people`,
+                    );
+                }
+            }
+
+            const startTime = new Date(`${day.date}T${day.startTime}:00`);
+            const endTime = new Date(`${day.date}T${day.endTime}:00`);
+
+            if (endTime <= startTime) {
+                throw new BadRequestException(`End time must be after start time for ${day.date}`);
+            }
+
+            const lockKey = `booking:${day.serviceId}:${startTime.toISOString()}`;
+            const locked = await this.redis.acquireLock(lockKey, 30);
+            if (!locked) {
+                throw new ConflictException(`Another booking is being processed for ${day.date}. Please try again.`);
+            }
+
+            try {
+                if (effectiveCapacity > 0) {
+                    const overlappingCount = await this.prisma.booking.count({
+                        where: {
+                            serviceId: day.serviceId,
+                            status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
+                            startTime: { lt: endTime },
+                            endTime: { gt: startTime },
+                        },
+                    });
+                    if (overlappingCount >= effectiveCapacity) {
+                        throw new ConflictException(`No availability for ${day.date}`);
+                    }
+                }
+
+                const booking = await this.prisma.booking.create({
+                    data: {
+                        userId: dto.customerId,
+                        branchId: dto.branchId,
+                        serviceId: day.serviceId,
+                        status: 'CONFIRMED',
+                        startTime,
+                        endTime,
+                        numberOfPeople,
+                        totalPrice: dayTotal,
+                        notes: day.notes || dto.notes,
+                        requestedSetup: day.setupType ?? null,
+                        pricingInterval: day.pricingInterval ?? null,
+                        unitPrice: day.unitPrice ?? null,
+                        subtotal: daySubtotal,
+                        discountType: resolvedDiscountType as any,
+                        discountValue: resolvedDiscountValue || null,
+                        discountAmount: dayDiscount || null,
+                        taxRate: subjectToTax ? taxRate : null,
+                        taxAmount: dayTax || null,
+                        promoCodeId,
+                        bookingGroupId,
+                        payment: {
+                            create: {
+                                method: 'CASH',
+                                status: 'PENDING',
+                                amount: dayTotal,
+                                paidAt: null,
+                            },
+                        },
+                    },
+                    include: {
+                        branch: { select: { id: true, name: true, city: true, address: true } },
+                        service: { select: { id: true, type: true, name: true } },
+                        payment: true,
+                    },
+                });
+
+                // Create add-on records
+                if (day.addOns && day.addOns.length > 0) {
+                    for (const addOn of day.addOns) {
+                        const vendorAddOn = await this.prisma.vendorAddOn.findUnique({ where: { id: addOn.vendorAddOnId } });
+                        if (vendorAddOn) {
+                            await this.prisma.bookingAddOn.create({
+                                data: {
+                                    bookingId: booking.id,
+                                    vendorAddOnId: addOn.vendorAddOnId,
+                                    name: vendorAddOn.name,
+                                    unitPrice: vendorAddOn.unitPrice,
+                                    quantity: addOn.quantity,
+                                    totalPrice: vendorAddOn.unitPrice.toNumber() * addOn.quantity,
+                                    serviceTime: addOn.serviceTime,
+                                    comments: addOn.comments,
+                                },
+                            });
+                        }
+                    }
+                }
+
+                if (booking.payment) {
+                    await this.prisma.paymentLog.create({
+                        data: {
+                            paymentId: booking.payment.id,
+                            action: 'CREATED',
+                            performedById: vendorUserId,
+                            details: `Cash payment of ${dayTotal.toFixed(3)} JOD created by vendor for booking at ${branch.name}`,
+                        },
+                    });
+                }
+
+                createdBookings.push(booking);
+            } finally {
+                await this.redis.releaseLock(lockKey);
+            }
+        }
+
+        // Increment promo code uses
+        if (promoCodeId) {
+            await this.prisma.promoCode.update({
+                where: { id: promoCodeId },
+                data: { currentUses: { increment: 1 } },
+            });
+        }
+
+        // Notify customer
+        const datesSummary = dto.days.length > 1
+            ? `${dto.days.length} bookings on multiple dates`
+            : `a booking`;
+        await this.prisma.notification.create({
+            data: {
+                userId: dto.customerId,
+                type: 'BOOKING_CONFIRMED',
+                title: 'Booking Confirmed',
+                message: `${datesSummary} at ${branch.name} has been created for you. Payment: Cash (pending).`,
+                data: { bookingIds: createdBookings.map(b => b.id), branchId: branch.id },
+            },
+        });
+
+        return {
+            bookingIds: createdBookings.map(b => b.id),
+            bookingGroupId,
+            financialSummary: {
+                subtotal: aggregateSubtotal,
+                discount: discountAmount,
+                discountType: resolvedDiscountType,
+                discountValue: resolvedDiscountValue,
+                taxRate,
+                tax: totalTax,
+                total: grandTotal,
+            },
+        };
     }
 }

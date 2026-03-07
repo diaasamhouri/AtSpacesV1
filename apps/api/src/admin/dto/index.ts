@@ -22,6 +22,7 @@ export {
     AdminPaymentsQueryDto,
     AdminBranchesQueryDto,
     AdminApprovalsQueryDto,
+    AdminServicesQueryDto,
 } from './admin-query.dto';
 export { VerifyVendorDto } from './verify-vendor.dto';
 export { SendNotificationDto } from './send-notification.dto';

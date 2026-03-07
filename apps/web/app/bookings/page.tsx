@@ -13,6 +13,7 @@ import {
   bookingStatusColor,
 } from "../../lib/format";
 import type { Booking } from "../../lib/types";
+import { formatSetupType } from "../../lib/types";
 
 type Tab = "all" | "upcoming" | "past" | "cancelled";
 
@@ -77,7 +78,7 @@ export default function BookingsPage() {
   const filtered = filterBookings(bookings, tab);
 
   return (
-    <div className="bg-dark-950 min-h-screen pt-24 pb-8">
+    <div className="bg-slate-50 dark:bg-dark-950 min-h-screen pt-24 pb-8">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
           My Bookings
@@ -90,14 +91,14 @@ export default function BookingsPage() {
         )}
 
         {/* Tabs */}
-        <div className="mb-8 flex gap-2 rounded-2xl bg-dark-900 border border-slate-200 dark:border-slate-800 p-2">
+        <div className="mb-8 flex gap-2 rounded-2xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-slate-800 p-2">
           {TABS.map((t) => (
             <button
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
               className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold transition-all duration-300 ${tab === t.key
-                  ? "bg-dark-800 text-gray-900 dark:text-white shadow-float border border-slate-200 dark:border-slate-700"
+                  ? "bg-slate-100 dark:bg-dark-800 text-gray-900 dark:text-white shadow-float border border-slate-200 dark:border-slate-700"
                   : "text-slate-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-dark-850"
                 }`}
             >
@@ -112,12 +113,12 @@ export default function BookingsPage() {
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-32 animate-pulse rounded-3xl bg-dark-900 border border-slate-200 dark:border-slate-800"
+                className="h-32 animate-pulse rounded-3xl bg-slate-100 dark:bg-dark-900 border border-slate-200 dark:border-slate-800"
               />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="mt-12 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 p-16 text-center bg-dark-900">
+          <div className="mt-12 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 p-16 text-center bg-white dark:bg-dark-900">
             <svg
               className="mx-auto h-12 w-12 text-slate-500 mb-4"
               fill="none"
@@ -149,7 +150,7 @@ export default function BookingsPage() {
               <Link
                 key={booking.id}
                 href={`/bookings/${booking.id}`}
-                className="group block rounded-3xl border border-slate-200 dark:border-slate-800 bg-dark-900 p-6 transition-all duration-300 hover:border-brand-500/50 hover:bg-gray-50 dark:hover:bg-dark-850 hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:-translate-y-1"
+                className="group block rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-6 transition-all duration-300 hover:border-brand-500/50 hover:bg-gray-50 dark:hover:bg-dark-850 hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:-translate-y-1"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
@@ -162,6 +163,11 @@ export default function BookingsPage() {
                       >
                         {formatBookingStatus(booking.status)}
                       </span>
+                      {booking.requestedSetup && (
+                        <span className="inline-flex rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1.5 text-xs font-bold">
+                          Setup: {formatSetupType(booking.requestedSetup)}
+                        </span>
+                      )}
                     </div>
                     <h3 className="mt-4 text-xl font-bold text-gray-900 dark:text-white group-hover:text-brand-500 transition-colors">
                       {booking.service.name}
@@ -184,7 +190,7 @@ export default function BookingsPage() {
                 </div>
 
                 {/* Date/time row */}
-                <div className="mt-6 flex flex-wrap items-center gap-3 sm:gap-6 rounded-2xl bg-dark-850 p-4 text-sm sm:text-base font-medium text-slate-200 border border-slate-200 dark:border-slate-700">
+                <div className="mt-6 flex flex-wrap items-center gap-3 sm:gap-6 rounded-2xl bg-slate-50 dark:bg-dark-850 p-4 text-sm sm:text-base font-medium text-slate-600 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                   <span className="flex items-center gap-2">
                     <svg
                       className="h-4 w-4 sm:h-5 sm:w-5 text-brand-500"

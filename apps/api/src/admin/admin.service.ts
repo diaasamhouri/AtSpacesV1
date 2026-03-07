@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { VendorStatus, BookingStatus, Role } from '@prisma/client';
+import { VendorStatus, BookingStatus, Role, ServiceType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { buildPaginatedResponse } from '../common/helpers/paginate';
+import { CreateServiceDto } from '../services/dto';
 
 @Injectable()
 export class AdminService {
@@ -125,6 +126,10 @@ export class AdminService {
                         _count: { select: { services: true, bookings: true } },
                     },
                 },
+                authorizedSignatories: true,
+                companyContacts: true,
+                departmentContacts: true,
+                bankingInfo: true,
             },
         });
         if (!vendor) throw new NotFoundException('Vendor not found');
@@ -136,8 +141,23 @@ export class AdminService {
             phone: vendor.phone,
             website: vendor.website,
             images: vendor.images,
+            logo: vendor.logo,
+            socialLinks: vendor.socialLinks,
+            companyLegalName: vendor.companyLegalName,
+            companyShortName: vendor.companyShortName,
+            companyTradeName: vendor.companyTradeName,
+            companyNationalId: vendor.companyNationalId,
+            companyRegistrationNumber: vendor.companyRegistrationNumber,
+            companyRegistrationDate: vendor.companyRegistrationDate,
+            companySalesTaxNumber: vendor.companySalesTaxNumber,
+            registeredInCountry: vendor.registeredInCountry,
+            hasTaxExemption: vendor.hasTaxExemption,
+            companyDescription: vendor.companyDescription,
             status: vendor.status,
             isVerified: vendor.isVerified,
+            verificationRequestedAt: vendor.verificationRequestedAt,
+            verifiedAt: vendor.verifiedAt,
+            verificationNote: vendor.verificationNote,
             commissionRate: vendor.commissionRate,
             rejectionReason: vendor.rejectionReason,
             createdAt: vendor.createdAt,
@@ -146,7 +166,47 @@ export class AdminService {
                 id: b.id, name: b.name, city: b.city, address: b.address, status: b.status,
                 servicesCount: b._count.services, bookingsCount: b._count.bookings,
             })),
+            authorizedSignatories: vendor.authorizedSignatories,
+            companyContacts: vendor.companyContacts,
+            departmentContacts: vendor.departmentContacts,
+            bankingInfo: vendor.bankingInfo,
         };
+    }
+
+    async listPendingVerifications(query: { page?: number; limit?: number } = {}) {
+        const page = query.page || 1;
+        const limit = query.limit || 20;
+        const skip = (page - 1) * limit;
+
+        const where = {
+            verificationRequestedAt: { not: null },
+            isVerified: false,
+        };
+
+        const [vendors, total] = await Promise.all([
+            this.prisma.vendorProfile.findMany({
+                where,
+                orderBy: { verificationRequestedAt: 'asc' as const },
+                skip,
+                take: limit,
+                include: {
+                    user: { select: { name: true, email: true } },
+                },
+            }),
+            this.prisma.vendorProfile.count({ where }),
+        ]);
+
+        return buildPaginatedResponse(
+            vendors.map(v => ({
+                id: v.id,
+                companyName: v.companyName,
+                logo: v.logo,
+                status: v.status,
+                verificationRequestedAt: v.verificationRequestedAt,
+                owner: v.user,
+            })),
+            total, page, limit,
+        );
     }
 
     async updateVendorStatus(vendorId: string, status: VendorStatus, reason?: string) {
@@ -176,6 +236,7 @@ export class AdminService {
                 isVerified: verified,
                 verifiedAt: verified ? new Date() : null,
                 verificationNote: note || null,
+                verificationRequestedAt: null,
             },
             include: { user: { select: { id: true, name: true, email: true } } },
         });
@@ -189,6 +250,7 @@ export class AdminService {
                 message: verified
                     ? 'Congratulations! Your business has been verified. A blue badge will now appear next to your name.'
                     : 'Your verified badge has been removed.',
+                data: { vendorProfileId: vendorId },
             },
         });
 
@@ -224,6 +286,11 @@ export class AdminService {
                     role: true,
                     isActive: true,
                     createdAt: true,
+                    entityType: true,
+                    gender: true,
+                    nationality: true,
+                    customerClassification: true,
+                    preferredLanguage: true,
                 },
             }),
             this.prisma.user.count({ where }),
@@ -355,9 +422,39 @@ export class AdminService {
         };
     }
 
+    private static readonly VALID_TRANSITIONS: Record<string, string[]> = {
+        PENDING: ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'],
+        PENDING_APPROVAL: ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'],
+        CONFIRMED: ['CHECKED_IN', 'CANCELLED', 'NO_SHOW'],
+        CHECKED_IN: ['COMPLETED', 'NO_SHOW'],
+        COMPLETED: [],
+        CANCELLED: [],
+        REJECTED: [],
+        EXPIRED: [],
+        NO_SHOW: [],
+    };
+
     async updateBookingStatus(bookingId: string, status: BookingStatus) {
         const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
         if (!booking) throw new NotFoundException('Booking not found');
+
+        const allowed = AdminService.VALID_TRANSITIONS[booking.status] ?? [];
+        if (!allowed.includes(status)) {
+            throw new BadRequestException(
+                `Cannot transition from ${booking.status} to ${status}`,
+            );
+        }
+
+        // Auto-refund on rejection
+        if (status === 'REJECTED' || status === 'CANCELLED') {
+            const payment = await this.prisma.payment.findUnique({ where: { bookingId } });
+            if (payment && payment.status === 'COMPLETED') {
+                await this.prisma.payment.update({
+                    where: { id: payment.id },
+                    data: { status: 'REFUNDED' },
+                });
+            }
+        }
 
         return this.prisma.booking.update({
             where: { id: bookingId },
@@ -427,12 +524,12 @@ export class AdminService {
         );
     }
 
-    async refundPayment(paymentId: string) {
+    async refundPayment(paymentId: string, adminUserId?: string) {
         const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
         if (!payment) throw new NotFoundException('Payment not found');
         if (payment.status !== 'COMPLETED') throw new BadRequestException('Only completed payments can be refunded');
 
-        const result = await this.prisma.$transaction([
+        const txOps: any[] = [
             this.prisma.payment.update({
                 where: { id: paymentId },
                 data: { status: 'REFUNDED' },
@@ -441,12 +538,27 @@ export class AdminService {
                 where: { id: payment.bookingId },
                 data: { status: 'CANCELLED' },
             }),
-        ]);
+        ];
+
+        if (adminUserId) {
+            txOps.push(
+                this.prisma.paymentLog.create({
+                    data: {
+                        paymentId,
+                        action: 'REFUNDED',
+                        performedById: adminUserId,
+                        details: `Payment of ${payment.amount} ${payment.currency} refunded by admin`,
+                    },
+                }),
+            );
+        }
+
+        const result = await this.prisma.$transaction(txOps);
 
         // Notify customer about the refund
         const booking = await this.prisma.booking.findUnique({
             where: { id: payment.bookingId },
-            select: { userId: true, branch: { select: { name: true } } },
+            select: { userId: true, branchId: true, branch: { select: { name: true } } },
         });
         if (booking) {
             await this.prisma.notification.create({
@@ -455,6 +567,7 @@ export class AdminService {
                     type: 'PAYMENT_SUCCESS',
                     title: 'Payment Refunded',
                     message: `Your payment for the booking at ${booking.branch.name} has been refunded.`,
+                    data: { bookingId: payment.bookingId, branchId: booking.branchId },
                 },
             });
         }
@@ -462,9 +575,31 @@ export class AdminService {
         return result;
     }
 
+    async getPaymentLogs(paymentId: string) {
+        const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+        if (!payment) throw new NotFoundException('Payment not found');
+
+        const logs = await this.prisma.paymentLog.findMany({
+            where: { paymentId },
+            include: { performedBy: { select: { name: true, role: true } } },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        return logs.map(log => ({
+            id: log.id,
+            paymentId: log.paymentId,
+            action: log.action,
+            performedBy: { name: log.performedBy.name, role: log.performedBy.role },
+            receiptNumber: log.receiptNumber,
+            notes: log.notes,
+            details: log.details,
+            createdAt: log.createdAt.toISOString(),
+        }));
+    }
+
     // ==================== BRANCHES ====================
 
-    async listBranches(query: { page?: number; limit?: number; search?: string } = {}) {
+    async listBranches(query: { page?: number; limit?: number; search?: string; status?: string; city?: string } = {}) {
         const page = query.page || 1;
         const limit = query.limit || 20;
         const skip = (page - 1) * limit;
@@ -475,6 +610,12 @@ export class AdminService {
                 { name: { contains: query.search, mode: 'insensitive' } },
                 { vendor: { companyName: { contains: query.search, mode: 'insensitive' } } },
             ];
+        }
+        if (query.status) {
+            where.status = query.status;
+        }
+        if (query.city) {
+            where.city = query.city;
         }
 
         const [branches, total] = await Promise.all([
@@ -559,13 +700,27 @@ export class AdminService {
 
     // ==================== APPROVAL REQUESTS ====================
 
-    async listApprovalRequests(query: { page?: number; limit?: number } = {}) {
+    async listApprovalRequests(query: { page?: number; limit?: number; search?: string; status?: string } = {}) {
         const page = query.page || 1;
         const limit = query.limit || 20;
         const skip = (page - 1) * limit;
 
+        const where: any = {};
+        if (query.status) {
+            where.status = query.status;
+        }
+        if (query.search) {
+            where.OR = [
+                { description: { contains: query.search, mode: 'insensitive' } },
+                { branch: { name: { contains: query.search, mode: 'insensitive' } } },
+                { branch: { vendor: { companyName: { contains: query.search, mode: 'insensitive' } } } },
+                { vendorProfile: { companyName: { contains: query.search, mode: 'insensitive' } } },
+            ];
+        }
+
         const [requests, total] = await Promise.all([
             this.prisma.approvalRequest.findMany({
+                where,
                 orderBy: { createdAt: 'desc' },
                 skip,
                 take: limit,
@@ -578,7 +733,7 @@ export class AdminService {
                     },
                 },
             }),
-            this.prisma.approvalRequest.count(),
+            this.prisma.approvalRequest.count({ where }),
         ]);
 
         return buildPaginatedResponse(
@@ -633,6 +788,7 @@ export class AdminService {
                     message: status === 'APPROVED'
                         ? `Congratulations! Your vendor application for ${vendorProfile.companyName} has been approved. You can now start adding branches.`
                         : `Your vendor application for ${vendorProfile.companyName} was rejected.${reason ? ` Reason: ${reason}` : ''}`,
+                    data: { vendorProfileId: req.vendorProfileId },
                 },
             });
         }
@@ -811,6 +967,192 @@ export class AdminService {
         });
 
         return updated;
+    }
+
+    // ==================== ADMIN SERVICES ====================
+
+    async listAdminServices(query: { page?: number; limit?: number; search?: string; branchId?: string; type?: string; floor?: string } = {}) {
+        const page = query.page || 1;
+        const limit = query.limit || 20;
+        const skip = (page - 1) * limit;
+
+        const where: any = {};
+        if (query.branchId) where.branchId = query.branchId;
+        if (query.type) where.type = query.type as ServiceType;
+        if (query.floor) where.floor = { contains: query.floor, mode: 'insensitive' };
+        if (query.search) {
+            where.name = { contains: query.search, mode: 'insensitive' };
+        }
+
+        const [services, total] = await Promise.all([
+            this.prisma.service.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limit,
+                include: {
+                    branch: {
+                        select: { id: true, name: true, vendor: { select: { companyName: true } } },
+                    },
+                    pricing: true,
+                    setupConfigs: true,
+                },
+            }),
+            this.prisma.service.count({ where }),
+        ]);
+
+        return buildPaginatedResponse(
+            services.map(s => ({
+                id: s.id,
+                name: s.name,
+                unitNumber: s.unitNumber,
+                type: s.type,
+                description: s.description,
+                capacity: s.capacity,
+                isActive: s.isActive,
+                floor: s.floor,
+                profileNameEn: s.profileNameEn,
+                profileNameAr: s.profileNameAr,
+                weight: s.weight,
+                netSize: s.netSize ? s.netSize.toNumber() : null,
+                shape: s.shape,
+                features: s.features,
+                createdAt: s.createdAt,
+                branch: { id: s.branch.id, name: s.branch.name, vendor: s.branch.vendor.companyName },
+                pricing: s.pricing.map(p => ({ id: p.id, interval: p.interval, price: p.price.toNumber(), currency: p.currency })),
+                setupConfigs: s.setupConfigs.map(c => ({ setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
+            })),
+            total, page, limit,
+        );
+    }
+
+    async getAdminServiceById(id: string) {
+        const service = await this.prisma.service.findUnique({
+            where: { id },
+            include: {
+                branch: {
+                    select: { id: true, name: true, vendor: { select: { companyName: true } } },
+                },
+                pricing: true,
+                setupConfigs: true,
+            },
+        });
+        if (!service) throw new NotFoundException('Service not found');
+
+        return {
+            id: service.id,
+            name: service.name,
+            unitNumber: service.unitNumber,
+            type: service.type,
+            description: service.description,
+            capacity: service.capacity,
+            isActive: service.isActive,
+            floor: service.floor,
+            profileNameEn: service.profileNameEn,
+            profileNameAr: service.profileNameAr,
+            weight: service.weight,
+            netSize: service.netSize ? service.netSize.toNumber() : null,
+            shape: service.shape,
+            features: service.features,
+            createdAt: service.createdAt,
+            branch: { id: service.branch.id, name: service.branch.name, vendor: service.branch.vendor.companyName },
+            pricing: service.pricing.map(p => ({ id: p.id, interval: p.interval, price: p.price.toNumber(), currency: p.currency })),
+            setupConfigs: service.setupConfigs.map(c => ({ setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
+        };
+    }
+
+    async createAdminService(dto: CreateServiceDto) {
+        const branch = await this.prisma.branch.findUnique({ where: { id: dto.branchId } });
+        if (!branch) throw new NotFoundException('Branch not found');
+
+        if (!dto.pricing || dto.pricing.length === 0) {
+            throw new BadRequestException('At least one pricing interval must be provided');
+        }
+
+        const capacity = dto.setupConfigs && dto.setupConfigs.length > 0
+            ? Math.max(...dto.setupConfigs.map(c => c.maxPeople))
+            : dto.capacity ?? null;
+
+        const service = await this.prisma.service.create({
+            data: {
+                branchId: dto.branchId,
+                type: dto.type,
+                name: dto.name,
+                unitNumber: dto.unitNumber,
+                description: dto.description,
+                capacity,
+                floor: dto.floor,
+                profileNameEn: dto.profileNameEn,
+                profileNameAr: dto.profileNameAr,
+                weight: dto.weight,
+                netSize: dto.netSize,
+                shape: dto.shape,
+                features: dto.features,
+                pricing: {
+                    create: dto.pricing.map(p => ({ interval: p.interval, price: p.price })),
+                },
+                setupConfigs: dto.setupConfigs && dto.setupConfigs.length > 0 ? {
+                    create: dto.setupConfigs.map(c => ({ setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
+                } : undefined,
+            },
+            include: { pricing: true, setupConfigs: true },
+        });
+
+        return this.getAdminServiceById(service.id);
+    }
+
+    async updateAdminService(id: string, dto: any) {
+        const service = await this.prisma.service.findUnique({ where: { id } });
+        if (!service) throw new NotFoundException('Service not found');
+
+        const updateData: any = {};
+        if (dto.name !== undefined) updateData.name = dto.name;
+        if (dto.type !== undefined) updateData.type = dto.type;
+        if (dto.description !== undefined) updateData.description = dto.description;
+        if (dto.capacity !== undefined) updateData.capacity = dto.capacity;
+        if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
+        if (dto.floor !== undefined) updateData.floor = dto.floor;
+        if (dto.profileNameEn !== undefined) updateData.profileNameEn = dto.profileNameEn;
+        if (dto.profileNameAr !== undefined) updateData.profileNameAr = dto.profileNameAr;
+        if (dto.weight !== undefined) updateData.weight = dto.weight;
+        if (dto.netSize !== undefined) updateData.netSize = dto.netSize;
+        if (dto.shape !== undefined) updateData.shape = dto.shape;
+        if (dto.unitNumber !== undefined) updateData.unitNumber = dto.unitNumber;
+        if (dto.features !== undefined) updateData.features = dto.features;
+
+        if (dto.pricing && dto.pricing.length > 0) {
+            await this.prisma.$transaction([
+                this.prisma.servicePricing.deleteMany({ where: { serviceId: id } }),
+                this.prisma.servicePricing.createMany({
+                    data: dto.pricing.map((p: any) => ({ serviceId: id, interval: p.interval, price: p.price })),
+                }),
+            ]);
+        }
+
+        if (dto.setupConfigs) {
+            if (dto.setupConfigs.length > 0) {
+                updateData.capacity = Math.max(...dto.setupConfigs.map((c: any) => c.maxPeople));
+            }
+            await this.prisma.$transaction([
+                this.prisma.serviceSetupConfig.deleteMany({ where: { serviceId: id } }),
+                ...(dto.setupConfigs.length > 0 ? [
+                    this.prisma.serviceSetupConfig.createMany({
+                        data: dto.setupConfigs.map((c: any) => ({ serviceId: id, setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
+                    }),
+                ] : []),
+            ]);
+        }
+
+        await this.prisma.service.update({ where: { id }, data: updateData });
+
+        return this.getAdminServiceById(id);
+    }
+
+    async deleteAdminService(id: string) {
+        const service = await this.prisma.service.findUnique({ where: { id } });
+        if (!service) throw new NotFoundException('Service not found');
+
+        return this.prisma.service.delete({ where: { id } });
     }
 
     // ==================== EXPORTS ====================

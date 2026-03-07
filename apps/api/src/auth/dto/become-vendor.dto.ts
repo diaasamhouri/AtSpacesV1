@@ -1,5 +1,21 @@
-import { IsString, IsOptional, IsArray, IsNotEmpty, IsDateString } from 'class-validator';
+import {
+    IsString,
+    IsOptional,
+    IsArray,
+    IsNotEmpty,
+    IsDateString,
+    IsBoolean,
+    ValidateNested,
+    ArrayMinSize,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+    CreateAuthorizedSignatoryDto,
+    CreateCompanyContactDto,
+    CreateDepartmentContactDto,
+    CreateBankingInfoDto,
+} from './vendor-sub.dto';
 
 export class BecomeVendorDto {
     @ApiProperty({ description: 'Company or venue name' })
@@ -42,5 +58,82 @@ export class BecomeVendorDto {
     @IsDateString()
     @IsOptional()
     agreedToTermsAt?: string;
-}
 
+    // ==================== EXPANDED FIELDS ====================
+
+    @ApiProperty({ description: 'Company legal name' })
+    @IsString()
+    @IsNotEmpty()
+    companyLegalName: string;
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    companyShortName?: string;
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    companyTradeName?: string;
+
+    @ApiProperty({ description: 'Company national ID' })
+    @IsString()
+    @IsNotEmpty()
+    companyNationalId: string;
+
+    @ApiProperty({ description: 'Company registration number' })
+    @IsString()
+    @IsNotEmpty()
+    companyRegistrationNumber: string;
+
+    @ApiPropertyOptional()
+    @IsDateString()
+    @IsOptional()
+    companyRegistrationDate?: string;
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    companySalesTaxNumber?: string;
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    registeredInCountry?: string;
+
+    @ApiPropertyOptional()
+    @IsBoolean()
+    @IsOptional()
+    hasTaxExemption?: boolean;
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    companyDescription?: string;
+
+    // ==================== NESTED SUB-MODELS ====================
+
+    @ApiProperty({ type: [CreateAuthorizedSignatoryDto] })
+    @ValidateNested({ each: true })
+    @Type(() => CreateAuthorizedSignatoryDto)
+    @ArrayMinSize(1)
+    authorizedSignatories: CreateAuthorizedSignatoryDto[];
+
+    @ApiProperty({ type: [CreateCompanyContactDto] })
+    @ValidateNested({ each: true })
+    @Type(() => CreateCompanyContactDto)
+    @ArrayMinSize(1)
+    companyContacts: CreateCompanyContactDto[];
+
+    @ApiPropertyOptional({ type: [CreateDepartmentContactDto] })
+    @IsOptional()
+    @ValidateNested({ each: true })
+    @Type(() => CreateDepartmentContactDto)
+    departmentContacts?: CreateDepartmentContactDto[];
+
+    @ApiProperty({ type: [CreateBankingInfoDto] })
+    @ValidateNested({ each: true })
+    @Type(() => CreateBankingInfoDto)
+    @ArrayMinSize(1)
+    bankingInfo: CreateBankingInfoDto[];
+}

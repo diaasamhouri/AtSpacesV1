@@ -102,7 +102,7 @@ export default function VendorEarningsPage() {
             </div>
 
             {/* Monthly Chart */}
-            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Monthly Net Earnings</h2>
                 {data?.monthly?.length > 0 ? (
                     <BarChart

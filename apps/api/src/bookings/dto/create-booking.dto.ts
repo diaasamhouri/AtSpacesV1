@@ -9,6 +9,7 @@ import {
   Min,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { SetupType } from '@prisma/client';
 
 export enum PricingIntervalParam {
   HOURLY = 'HOURLY',
@@ -87,4 +88,9 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   promoCode?: string;
+
+  @ApiPropertyOptional({ description: 'Requested room setup type (for meeting rooms / event spaces)', enum: SetupType })
+  @IsOptional()
+  @IsEnum(SetupType)
+  requestedSetup?: SetupType;
 }

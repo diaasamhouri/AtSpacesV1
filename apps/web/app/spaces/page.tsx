@@ -26,6 +26,7 @@ interface SpacesPageProps {
     search?: string;
     page?: string;
     sort?: string;
+    people?: string;
   }>;
 }
 
@@ -39,6 +40,7 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
     page: params.page ? parseInt(params.page, 10) : 1,
     limit: 12,
     sort: params.sort,
+    capacity: params.people ? parseInt(params.people, 10) : undefined,
   };
 
   let branches: BranchListItem[];
@@ -112,7 +114,7 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
           {/* Results Grid */}
           <div className="lg:col-span-3">
             {branches.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-12 text-center bg-dark-900">
+              <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-12 text-center bg-white dark:bg-dark-900">
                 <svg
                   className="mx-auto h-12 w-12 text-slate-500"
                   fill="none"

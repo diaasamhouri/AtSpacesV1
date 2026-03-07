@@ -8,6 +8,7 @@ import { useToast } from "../../components/ui/toast-provider";
 import { format } from "date-fns";
 import StatusBadge from "../../components/ui/status-badge";
 import { Pagination } from "../../components/pagination";
+import { SearchBar } from "../../components/search-bar";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 import type { PaginationMeta, AdminPayment } from "../../../lib/types";
 
@@ -28,17 +29,19 @@ export default function AdminPaymentsPage() {
     const [refundTarget, setRefundTarget] = useState<string | null>(null);
 
     const page = Number(searchParams.get("page")) || 1;
+    const search = searchParams.get("search") || "";
 
     const loadPayments = useCallback(() => {
         if (!token) return;
         setLoading(true);
         getAdminPayments(token, {
             page,
+            search: search || undefined,
             status: filter === "ALL" ? undefined : filter,
         })
             .then((res) => { setPayments(res.data); setMeta(res.meta); setLoading(false); })
             .catch(() => setLoading(false));
-    }, [token, page, filter]);
+    }, [token, page, search, filter]);
 
     useEffect(() => { loadPayments(); }, [loadPayments]);
 
@@ -79,7 +82,7 @@ export default function AdminPaymentsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Payments Management</h1>
                 <button
                     onClick={handleExport}
@@ -97,10 +100,12 @@ export default function AdminPaymentsPage() {
                 </button>
             </div>
 
+            <SearchBar defaultValue={search} placeholder="Search by customer name..." />
+
             <div className="flex flex-wrap gap-2">
                 {STATUSES.map((s) => (
                     <button key={s} onClick={() => setFilter(s)}
-                        className={`rounded-xl px-4 py-2 text-xs font-bold transition-all duration-300 ${filter === s ? "bg-brand-500 text-white shadow-[0_2px_8px_rgba(255,91,4,0.4)]" : "bg-dark-850 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:text-gray-900 dark:hover:text-white hover:border-slate-500"}`}>
+                        className={`rounded-xl px-4 py-2 text-xs font-bold transition-all duration-300 ${filter === s ? "bg-brand-500 text-white shadow-[0_2px_8px_rgba(255,91,4,0.4)]" : "bg-slate-100 dark:bg-dark-850 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:text-gray-900 dark:hover:text-white hover:border-slate-500"}`}>
                         {s}
                     </button>
                 ))}
@@ -111,10 +116,10 @@ export default function AdminPaymentsPage() {
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
                 </div>
             ) : (
-                <div className="overflow-hidden rounded-2xl bg-dark-900 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="overflow-hidden rounded-2xl bg-white dark:bg-dark-900 shadow-float border border-slate-200 dark:border-slate-800">
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-slate-800">
-                            <thead className="bg-dark-850">
+                            <thead className="bg-slate-50 dark:bg-dark-850">
                                 <tr>
                                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Customer</th>
                                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Vendor / Branch</th>

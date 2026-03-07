@@ -106,7 +106,7 @@ export default function AdminSettingsPage() {
                                         min="0"
                                         max="100"
                                         step="0.1"
-                                        className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 pl-4 pr-12 text-gray-900 dark:text-white text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500 bg-dark-850 py-3 transition-colors"
+                                        className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 pl-4 pr-12 text-gray-900 dark:text-white text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500 bg-white dark:bg-dark-850 py-3 transition-colors"
                                         placeholder="10"
                                         value={defaultCommission}
                                         onChange={(e) => setDefaultCommission(e.target.value)}
@@ -122,7 +122,7 @@ export default function AdminSettingsPage() {
                         </div>
                     </div>
 
-                    <div className="bg-dark-850 px-6 py-4 flex justify-end border-t border-slate-200 dark:border-slate-800">
+                    <div className="bg-slate-50 dark:bg-dark-850 px-6 py-4 flex justify-end border-t border-slate-200 dark:border-slate-800">
                         <button
                             onClick={handleSave}
                             disabled={saving}

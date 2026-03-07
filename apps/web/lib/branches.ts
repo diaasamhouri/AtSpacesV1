@@ -7,6 +7,8 @@ export interface ListBranchesParams {
   search?: string;
   page?: number;
   limit?: number;
+  sort?: string;
+  capacity?: number;
 }
 
 export async function listBranches(
@@ -19,6 +21,8 @@ export async function listBranches(
       search: params.search,
       page: params.page,
       limit: params.limit,
+      sort: params.sort,
+      capacity: params.capacity,
     },
     next: { revalidate: 60 },
   });

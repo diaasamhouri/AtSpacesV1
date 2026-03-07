@@ -43,7 +43,7 @@ AtSpaces is a coworking space booking and vendor management platform for Jordan.
 - **`packages/typescript-config`** — Shared tsconfig presets. Base has `noUncheckedIndexedAccess: true`.
 
 ### Backend Modules (`apps/api/src/`)
-Eight NestJS feature modules registered in `AppModule`:
+Eleven NestJS feature modules registered in `AppModule`:
 
 | Module | Prefix | Purpose |
 |--------|--------|---------|
@@ -55,6 +55,9 @@ Eight NestJS feature modules registered in `AppModule`:
 | Admin | `/admin` | Platform management: vendors, users, bookings, payments, analytics |
 | Reviews | `/reviews` | Branch reviews/ratings + favorites |
 | Uploads | `/uploads` | File upload (local disk at `apps/api/uploads/`, max 10MB) |
+| Contact | `/contact` | Public contact form submission |
+| Quotations | `/quotations` | Vendor quotation management (create, update, PDF export) |
+| Invoices | `/invoices` | Vendor invoice management (create, update, PDF export) |
 
 Shared services: `PrismaService` (DB), `RedisService` (distributed locking).
 

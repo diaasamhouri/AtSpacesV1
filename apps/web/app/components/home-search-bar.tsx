@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 export function HomeSearchBar() {
     const [query, setQuery] = useState("");
     const [date, setDate] = useState("");
+    const [duration, setDuration] = useState("");
     const [people, setPeople] = useState("");
     const [focused, setFocused] = useState<string | null>(null);
     const dateRef = useRef<HTMLInputElement>(null);
@@ -16,6 +17,7 @@ export function HomeSearchBar() {
         const params = new URLSearchParams();
         if (query.trim()) params.set("search", query.trim());
         if (date) params.set("date", date);
+        if (duration) params.set("duration", duration);
         if (people) params.set("people", people);
         const qs = params.toString();
         router.push(qs ? `/spaces?${qs}` : "/spaces");
@@ -108,6 +110,46 @@ export function HomeSearchBar() {
                         tabIndex={-1}
                     />
                 </button>
+
+                {/* Divider */}
+                <div className="hidden sm:block h-8 w-px bg-slate-200 dark:bg-slate-700 shrink-0" />
+
+                {/* Duration field */}
+                <div className="hidden sm:flex items-center gap-2 px-4">
+                    <svg
+                        className="h-4 w-4 shrink-0 text-brand-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth="2"
+                        stroke="currentColor"
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                        />
+                    </svg>
+                    <select
+                        value={duration}
+                        onChange={(e) => setDuration(e.target.value)}
+                        onFocus={() => setFocused("duration")}
+                        onBlur={() => setFocused(null)}
+                        className={`py-4 text-sm font-medium bg-transparent border-none ring-0 focus:ring-0 focus:outline-none cursor-pointer ${
+                            duration
+                                ? "text-gray-900 dark:text-white"
+                                : "text-slate-400 dark:text-slate-500"
+                        }`}
+                    >
+                        <option value="">Duration</option>
+                        <option value="1">1 hour</option>
+                        <option value="2">2 hours</option>
+                        <option value="3">3 hours</option>
+                        <option value="4">Half Day (4h)</option>
+                        <option value="8">Full Day</option>
+                        <option value="week">Weekly</option>
+                        <option value="month">Monthly</option>
+                    </select>
+                </div>
 
                 {/* Divider */}
                 <div className="hidden sm:block h-8 w-px bg-slate-200 dark:bg-slate-700 shrink-0" />

@@ -32,6 +32,13 @@ export class ListBranchesQueryDto {
   @IsString()
   sort?: string;
 
+  @ApiPropertyOptional({ description: 'Minimum capacity (number of people)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  capacity?: number;
+
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()
   @Type(() => Number)

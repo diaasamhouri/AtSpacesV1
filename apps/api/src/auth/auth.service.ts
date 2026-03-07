@@ -266,7 +266,7 @@ export class AuthService {
         data: { role: Role.VENDOR },
       });
 
-      // Create vendor profile
+      // Create vendor profile with expanded fields
       const vp = await tx.vendorProfile.create({
         data: {
           userId,
@@ -276,8 +276,80 @@ export class AuthService {
           website: data.website,
           images: data.images || [],
           agreedToTermsAt: data.agreedToTermsAt ? new Date(data.agreedToTermsAt) : null,
+          companyLegalName: data.companyLegalName,
+          companyShortName: data.companyShortName,
+          companyTradeName: data.companyTradeName,
+          companyNationalId: data.companyNationalId,
+          companyRegistrationNumber: data.companyRegistrationNumber,
+          companyRegistrationDate: data.companyRegistrationDate ? new Date(data.companyRegistrationDate) : null,
+          companySalesTaxNumber: data.companySalesTaxNumber,
+          registeredInCountry: data.registeredInCountry,
+          hasTaxExemption: data.hasTaxExemption ?? false,
+          companyDescription: data.companyDescription,
         },
       });
+
+      // Create authorized signatories
+      if (data.authorizedSignatories?.length) {
+        await tx.authorizedSignatory.createMany({
+          data: data.authorizedSignatories.map((s) => ({
+            vendorProfileId: vp.id,
+            fullName: s.fullName,
+            nationality: s.nationality,
+            legalDocType: s.legalDocType,
+            legalDocNumber: s.legalDocNumber,
+            mobile: s.mobile,
+            email: s.email,
+            gender: s.gender,
+          })),
+        });
+      }
+
+      // Create company contacts
+      if (data.companyContacts?.length) {
+        await tx.companyContact.createMany({
+          data: data.companyContacts.map((c) => ({
+            vendorProfileId: vp.id,
+            contactPersonName: c.contactPersonName,
+            mobile: c.mobile,
+            email: c.email,
+            website: c.website,
+            phone: c.phone,
+            fax: c.fax,
+          })),
+        });
+      }
+
+      // Create department contacts (optional)
+      if (data.departmentContacts?.length) {
+        await tx.departmentContact.createMany({
+          data: data.departmentContacts.map((d) => ({
+            vendorProfileId: vp.id,
+            department: d.department,
+            contactName: d.contactName,
+            mobile: d.mobile,
+            phone: d.phone,
+            email: d.email,
+            fax: d.fax,
+          })),
+        });
+      }
+
+      // Create banking info
+      if (data.bankingInfo?.length) {
+        await tx.bankingInfo.createMany({
+          data: data.bankingInfo.map((b) => ({
+            vendorProfileId: vp.id,
+            bankName: b.bankName,
+            bankBranch: b.bankBranch,
+            accountNumber: b.accountNumber,
+            iban: b.iban,
+            swiftCode: b.swiftCode,
+            accountantManagerName: b.accountantManagerName,
+            cliq: b.cliq,
+          })),
+        });
+      }
 
       // Create approval request so it appears in admin approvals queue
       await tx.approvalRequest.create({
@@ -304,6 +376,7 @@ export class AuthService {
           type: 'APPROVAL_REQUEST' as const,
           title: 'New Vendor Application',
           message: `${data.companyName} has submitted a vendor application and is awaiting approval.`,
+          data: { vendorProfileId: vendorProfile.id },
         })),
       });
     }

@@ -28,8 +28,8 @@ export class BranchesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all branches owned by the vendor' })
-  async getVendorBranches(@Req() req: any) {
-    return this.branchesService.getVendorBranches(req.user.id);
+  async getVendorBranches(@Req() req: any, @Query('unitType') unitType?: string) {
+    return this.branchesService.getVendorBranches(req.user.id, { unitType });
   }
 
   @Get(':id')

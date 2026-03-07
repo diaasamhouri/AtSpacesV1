@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Param, Patch, Body, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Patch, Delete, Body, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RequireSection, AdminSection } from '../auth/decorators/roles.decorator';
 import { Role, BookingStatus } from '@prisma/client';
 import { AdminService } from './admin.service';
+import { CreateServiceDto, UpdateServiceDto } from '../services/dto';
 import {
     UpdateVendorStatusDto,
     CreateTeamUserDto,
@@ -14,6 +15,7 @@ import {
     AdminPaymentsQueryDto,
     AdminBranchesQueryDto,
     AdminApprovalsQueryDto,
+    AdminServicesQueryDto,
     VerifyVendorDto,
     SendNotificationDto,
     UpdateSystemSettingsDto,
@@ -43,6 +45,13 @@ export class AdminController {
     @ApiOperation({ summary: 'List all vendors' })
     async listVendors(@Query() query: AdminVendorsQueryDto) {
         return this.adminService.listVendors(query);
+    }
+
+    @Get('vendors/verification-queue')
+    @RequireSection(AdminSection.VENDORS)
+    @ApiOperation({ summary: 'List vendors with pending verification requests' })
+    async listPendingVerifications(@Query() query: { page?: number; limit?: number }) {
+        return this.adminService.listPendingVerifications(query);
     }
 
     @Get('vendors/:id')
@@ -98,6 +107,46 @@ export class AdminController {
         return this.adminService.toggleUserActive(id);
     }
 
+    // ==================== ADMIN SERVICES ====================
+
+    @Get('services')
+    @RequireSection(AdminSection.BRANCHES)
+    @ApiOperation({ summary: 'List all services with filters' })
+    async listAdminServices(@Query() query: AdminServicesQueryDto) {
+        return this.adminService.listAdminServices(query);
+    }
+
+    @Get('services/:id')
+    @RequireSection(AdminSection.BRANCHES)
+    @ApiOperation({ summary: 'Get service detail by ID' })
+    async getAdminServiceById(@Param('id') id: string) {
+        return this.adminService.getAdminServiceById(id);
+    }
+
+    @Post('services')
+    @Roles(Role.ADMIN, Role.MODERATOR)
+    @RequireSection(AdminSection.BRANCHES)
+    @ApiOperation({ summary: 'Create a service for any branch' })
+    async createAdminService(@Body() dto: CreateServiceDto) {
+        return this.adminService.createAdminService(dto);
+    }
+
+    @Patch('services/:id')
+    @Roles(Role.ADMIN, Role.MODERATOR)
+    @RequireSection(AdminSection.BRANCHES)
+    @ApiOperation({ summary: 'Update a service' })
+    async updateAdminService(@Param('id') id: string, @Body() dto: UpdateServiceDto) {
+        return this.adminService.updateAdminService(id, dto);
+    }
+
+    @Delete('services/:id')
+    @Roles(Role.ADMIN)
+    @RequireSection(AdminSection.BRANCHES)
+    @ApiOperation({ summary: 'Delete a service' })
+    async deleteAdminService(@Param('id') id: string) {
+        return this.adminService.deleteAdminService(id);
+    }
+
     // ==================== BOOKINGS ====================
 
     @Get('bookings')
@@ -133,11 +182,18 @@ export class AdminController {
         return this.adminService.listPayments(query);
     }
 
+    @Get('payments/:id/logs')
+    @RequireSection(AdminSection.PAYMENTS)
+    @ApiOperation({ summary: 'Get payment audit logs' })
+    async getPaymentLogs(@Param('id') paymentId: string) {
+        return this.adminService.getPaymentLogs(paymentId);
+    }
+
     @Patch('payments/:id/refund')
     @RequireSection(AdminSection.PAYMENTS)
     @ApiOperation({ summary: 'Refund a completed payment' })
-    async refundPayment(@Param('id') id: string) {
-        return this.adminService.refundPayment(id);
+    async refundPayment(@Req() req: any, @Param('id') id: string) {
+        return this.adminService.refundPayment(id, req.user.id);
     }
 
     // ==================== BRANCHES ====================

@@ -10,6 +10,7 @@ const statusColorMap: Record<string, string> = {
   CANCELLED: "bg-red-500/10 text-red-500 border-red-500/20",
   REJECTED: "bg-red-500/10 text-red-500 border-red-500/20",
   NO_SHOW: "bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/20",
+  EXPIRED: "bg-orange-500/10 text-orange-400 border-orange-500/20",
 
   // Vendor statuses
   APPROVED: "bg-green-500/10 text-green-500 border-green-500/20",

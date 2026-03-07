@@ -2,6 +2,9 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceDto, UpdateServiceDto } from './dto';
 
+/** Service types that support setup configurations */
+const SETUP_ELIGIBLE_TYPES = ['MEETING_ROOM', 'EVENT_SPACE'];
+
 @Injectable()
 export class ServicesService {
     constructor(private prisma: PrismaService) { }
@@ -29,21 +32,47 @@ export class ServicesService {
             throw new BadRequestException('At least one pricing interval must be provided');
         }
 
+        // Setup configs only apply to MEETING_ROOM and EVENT_SPACE
+        if (dto.setupConfigs && dto.setupConfigs.length > 0 && !SETUP_ELIGIBLE_TYPES.includes(dto.type)) {
+            throw new BadRequestException('Setup configurations are only available for Meeting Room and Event Space types');
+        }
+
+        // Derive capacity from setupConfigs if provided
+        const capacity = dto.setupConfigs && dto.setupConfigs.length > 0
+            ? Math.max(...dto.setupConfigs.map(c => c.maxPeople))
+            : dto.capacity ?? null;
+
         return this.prisma.service.create({
             data: {
                 branchId: dto.branchId,
                 type: dto.type,
                 name: dto.name,
+                unitNumber: dto.unitNumber,
                 description: dto.description,
-                capacity: dto.capacity,
+                capacity,
+                floor: dto.floor,
+                profileNameEn: dto.profileNameEn,
+                profileNameAr: dto.profileNameAr,
+                weight: dto.weight,
+                netSize: dto.netSize,
+                shape: dto.shape,
+                features: dto.features,
                 pricing: {
                     create: dto.pricing.map((p) => ({
                         interval: p.interval,
+                        pricingMode: p.pricingMode ?? 'PER_BOOKING',
                         price: p.price,
                     })),
                 },
+                setupConfigs: dto.setupConfigs && dto.setupConfigs.length > 0 ? {
+                    create: dto.setupConfigs.map((c) => ({
+                        setupType: c.setupType,
+                        minPeople: c.minPeople,
+                        maxPeople: c.maxPeople,
+                    })),
+                } : undefined,
             },
-            include: { pricing: true },
+            include: { pricing: true, setupConfigs: true },
         });
     }
 
@@ -59,18 +88,40 @@ export class ServicesService {
             throw new NotFoundException('Service not found');
         }
 
+        // Setup configs only apply to MEETING_ROOM and EVENT_SPACE
+        const effectiveType = dto.type || service.type;
+        if (dto.setupConfigs && dto.setupConfigs.length > 0 && !SETUP_ELIGIBLE_TYPES.includes(effectiveType)) {
+            throw new BadRequestException('Setup configurations are only available for Meeting Room and Event Space types');
+        }
+
+        // If type is changing to a non-eligible type, clear existing setupConfigs
+        if (dto.type && !SETUP_ELIGIBLE_TYPES.includes(dto.type) && !dto.setupConfigs) {
+            dto.setupConfigs = [];
+        }
+
+        // Derive capacity from setupConfigs if provided
+        const capacity = dto.setupConfigs && dto.setupConfigs.length > 0
+            ? Math.max(...dto.setupConfigs.map(c => c.maxPeople))
+            : dto.capacity;
+
         // Prepare update data
         const updateData: any = {
             type: dto.type,
             name: dto.name,
+            unitNumber: dto.unitNumber,
             description: dto.description,
-            capacity: dto.capacity,
+            capacity,
             isActive: dto.isActive,
+            floor: dto.floor,
+            profileNameEn: dto.profileNameEn,
+            profileNameAr: dto.profileNameAr,
+            weight: dto.weight,
+            netSize: dto.netSize,
+            shape: dto.shape,
+            features: dto.features,
         };
 
-        // If pricing is provided, we can either upsert or delete all current and recreate.
-        // Recreating is easiest for replacing arrays unless ID stability is strictly required.
-        // For simplicity, we use a transaction to delete old pricing and create new ones.
+        // If pricing is provided, delete old and recreate
         if (dto.pricing) {
             if (dto.pricing.length === 0) {
                 throw new BadRequestException('At least one pricing interval must be provided');
@@ -82,16 +133,34 @@ export class ServicesService {
                     data: dto.pricing.map((p) => ({
                         serviceId,
                         interval: p.interval,
+                        pricingMode: p.pricingMode ?? 'PER_BOOKING',
                         price: p.price,
                     })),
                 }),
             ]);
         }
 
+        // If setupConfigs is provided, delete old and recreate
+        if (dto.setupConfigs) {
+            await this.prisma.$transaction([
+                this.prisma.serviceSetupConfig.deleteMany({ where: { serviceId } }),
+                ...(dto.setupConfigs.length > 0 ? [
+                    this.prisma.serviceSetupConfig.createMany({
+                        data: dto.setupConfigs.map((c) => ({
+                            serviceId,
+                            setupType: c.setupType,
+                            minPeople: c.minPeople,
+                            maxPeople: c.maxPeople,
+                        })),
+                    }),
+                ] : []),
+            ]);
+        }
+
         return this.prisma.service.update({
             where: { id: serviceId },
             data: updateData,
-            include: { pricing: true },
+            include: { pricing: true, setupConfigs: true },
         });
     }
 

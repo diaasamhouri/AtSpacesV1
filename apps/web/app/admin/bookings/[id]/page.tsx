@@ -11,6 +11,7 @@ import StatusBadge from "../../../components/ui/status-badge";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 import Link from "next/link";
 import type { AdminBookingDetail } from "../../../../lib/types";
+import { formatSetupType } from "../../../../lib/types";
 
 const STATUS_FLOW = ["PENDING", "PENDING_APPROVAL", "CONFIRMED", "CHECKED_IN", "COMPLETED"];
 
@@ -69,7 +70,7 @@ export default function AdminBookingDetailPage() {
             </Link>
 
             {/* Header */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">Booking Details</h1>
@@ -110,7 +111,7 @@ export default function AdminBookingDetailPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Customer Info */}
-                <div className="rounded-2xl bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Customer</h2>
                     <dl className="space-y-3 text-sm">
                         <div className="flex justify-between">
@@ -129,7 +130,7 @@ export default function AdminBookingDetailPage() {
                 </div>
 
                 {/* Space Info */}
-                <div className="rounded-2xl bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Space</h2>
                     <dl className="space-y-3 text-sm">
                         <div className="flex justify-between">
@@ -148,11 +149,21 @@ export default function AdminBookingDetailPage() {
                             <dt className="text-slate-500 font-medium">Service</dt>
                             <dd className="text-gray-900 dark:text-white font-medium">{booking.service?.name || "—"} <span className="text-brand-500 text-xs">({formatServiceType(booking.service?.type || "")})</span></dd>
                         </div>
+                        {booking.requestedSetup && (
+                            <div className="flex justify-between">
+                                <dt className="text-slate-500 font-medium">Requested Setup</dt>
+                                <dd className="text-gray-900 dark:text-white font-medium">
+                                    <span className="inline-flex rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 text-xs font-bold">
+                                        {formatSetupType(booking.requestedSetup)}
+                                    </span>
+                                </dd>
+                            </div>
+                        )}
                     </dl>
                 </div>
 
                 {/* Booking Details */}
-                <div className="rounded-2xl bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Booking Details</h2>
                     <dl className="space-y-3 text-sm">
                         <div className="flex justify-between">
@@ -174,14 +185,14 @@ export default function AdminBookingDetailPage() {
                         {booking.notes && (
                             <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
                                 <dt className="text-slate-500 font-medium mb-1">Notes</dt>
-                                <dd className="text-gray-900 dark:text-white font-medium bg-dark-850 p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-sm">{booking.notes}</dd>
+                                <dd className="text-gray-900 dark:text-white font-medium bg-white dark:bg-dark-850 p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-sm">{booking.notes}</dd>
                             </div>
                         )}
                     </dl>
                 </div>
 
                 {/* Payment Details */}
-                <div className="rounded-2xl bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">Payment</h2>
                     {booking.payment ? (
                         <dl className="space-y-3 text-sm">

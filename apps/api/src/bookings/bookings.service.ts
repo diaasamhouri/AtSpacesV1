@@ -17,12 +17,35 @@ export class BookingsService {
     private redis: RedisService,
   ) { }
 
+  /** Allowed booking status transitions */
+  private static readonly VALID_TRANSITIONS: Record<string, string[]> = {
+    PENDING: ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'],
+    PENDING_APPROVAL: ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'],
+    CONFIRMED: ['CHECKED_IN', 'CANCELLED', 'NO_SHOW'],
+    CHECKED_IN: ['COMPLETED', 'NO_SHOW'],
+    COMPLETED: [],
+    CANCELLED: [],
+    REJECTED: [],
+    EXPIRED: [],
+    NO_SHOW: [],
+  };
+
   async createBooking(userId: string, dto: CreateBookingDto) {
     const startTime = new Date(dto.startTime);
-    const endTime = new Date(dto.endTime);
+    let endTime = new Date(dto.endTime);
 
     if (endTime <= startTime) {
       throw new BadRequestException('End time must be after start time');
+    }
+
+    // Enforce half-day = 4 hours
+    if (dto.pricingInterval === 'HALF_DAY') {
+      const diffMs = endTime.getTime() - startTime.getTime();
+      const fourHoursMs = 4 * 60 * 60 * 1000;
+      if (Math.abs(diffMs - fourHoursMs) > 60000) {
+        // Auto-correct endTime to startTime + 4 hours
+        endTime = new Date(startTime.getTime() + fourHoursMs);
+      }
     }
 
     // Fetch service with pricing
@@ -52,9 +75,16 @@ export class BookingsService {
       );
     }
 
-    if (dto.numberOfPeople > service.capacity) {
+    // Reject requestedSetup for non-eligible service types
+    if (dto.requestedSetup && !['MEETING_ROOM', 'EVENT_SPACE'].includes(service.type)) {
+      throw new BadRequestException('Setup type is only available for Meeting Room and Event Space');
+    }
+
+    // Capacity check: use setupConfigs if available
+    const effectiveCapacity = service.capacity ?? 0;
+    if (dto.numberOfPeople > effectiveCapacity) {
       throw new BadRequestException(
-        `Requested ${dto.numberOfPeople} people but service capacity is ${service.capacity}`,
+        `Requested ${dto.numberOfPeople} people but service capacity is ${effectiveCapacity}`,
       );
     }
 
@@ -104,16 +134,31 @@ export class BookingsService {
         },
       });
 
-      if (overlappingCount >= service.capacity) {
+      if (overlappingCount >= (service.capacity ?? 0)) {
         throw new ConflictException(
           'No availability for the selected time slot',
         );
       }
 
-      // Calculate total price
-      let totalPrice = pricing.price.toNumber();
+      // Calculate financial breakdown
+      const unitPrice = pricing.price.toNumber();
+      const pricingMode = (pricing as any).pricingMode || 'PER_BOOKING';
 
+      let subtotal = unitPrice;
+      if (pricingMode === 'PER_PERSON') {
+        subtotal = unitPrice * dto.numberOfPeople;
+      } else if (pricingMode === 'PER_HOUR') {
+        const hours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+        subtotal = unitPrice * hours;
+      }
+
+      // Promo code validation + discount
       let promoCodeRecord: any = null;
+      let discountType: string = 'NONE';
+      let discountValue: number | null = null;
+      let discountAmount = 0;
+      let promoCodeId: string | null = null;
+
       if (dto.promoCode) {
         promoCodeRecord = await this.prisma.promoCode.findFirst({
           where: {
@@ -138,9 +183,28 @@ export class BookingsService {
           throw new BadRequestException('Promo code usage limit reached');
         }
 
-        const discountAmount = (totalPrice * promoCodeRecord.discountPercent) / 100;
-        totalPrice = Math.max(0, totalPrice - discountAmount);
+        discountType = 'PROMO_CODE';
+        discountValue = promoCodeRecord.discountPercent;
+        discountAmount = (subtotal * promoCodeRecord.discountPercent) / 100;
+        promoCodeId = promoCodeRecord.id;
       }
+
+      const afterDiscount = Math.max(0, subtotal - discountAmount);
+
+      // Tax calculation from vendor profile
+      const vendorProfile = await this.prisma.vendorProfile.findUnique({
+        where: { id: service.branch.vendorProfileId },
+        select: { taxRate: true, taxEnabled: true },
+      });
+
+      let taxRate: number | null = null;
+      let taxAmount = 0;
+      if (vendorProfile?.taxEnabled) {
+        taxRate = (vendorProfile.taxRate as any).toNumber?.() ?? Number(vendorProfile.taxRate);
+        taxAmount = (afterDiscount * taxRate!) / 100;
+      }
+
+      const totalPrice = afterDiscount + taxAmount;
 
       // Determine payment status based on method
       const isCash = dto.paymentMethod === 'CASH';
@@ -158,7 +222,17 @@ export class BookingsService {
           endTime,
           numberOfPeople: dto.numberOfPeople,
           totalPrice,
+          pricingInterval: dto.pricingInterval,
+          unitPrice,
+          subtotal,
+          discountType: discountType as any,
+          discountValue: discountValue,
+          discountAmount: discountAmount,
+          taxRate: taxRate,
+          taxAmount: taxAmount,
+          promoCodeId: promoCodeId,
           notes: dto.notes,
+          requestedSetup: dto.requestedSetup ?? null,
           payment: {
             create: {
               method: dto.paymentMethod,
@@ -176,6 +250,18 @@ export class BookingsService {
           payment: true,
         },
       });
+
+      // Log payment creation
+      if (booking.payment) {
+        await this.prisma.paymentLog.create({
+          data: {
+            paymentId: booking.payment.id,
+            action: 'CREATED',
+            performedById: userId,
+            details: `${dto.paymentMethod} payment of ${totalPrice} JOD created for booking at ${booking.branch.name}`,
+          },
+        });
+      }
 
       // Increment promo code usage if applicable
       if (promoCodeRecord) {
@@ -201,6 +287,7 @@ export class BookingsService {
               message: isAutoAccepted
                 ? `A new booking at ${branchInfo.name} has been auto-confirmed.`
                 : `A new booking at ${branchInfo.name} is awaiting your approval.`,
+              data: { bookingId: booking.id, branchId: service.branch.id },
             },
             {
               userId,
@@ -209,6 +296,7 @@ export class BookingsService {
               message: isAutoAccepted
                 ? `Your booking at ${branchInfo.name} has been confirmed.`
                 : `Your booking at ${branchInfo.name} has been submitted and is awaiting approval.`,
+              data: { bookingId: booking.id, branchId: service.branch.id },
             },
           ],
         });
@@ -278,7 +366,7 @@ export class BookingsService {
     return { data: bookings.map((b) => this.serializeBooking(b)) };
   }
 
-  async getVendorBookings(userId: string, query: { page?: number; limit?: number; search?: string; status?: string } = {}) {
+  async getVendorBookings(userId: string, query: { page?: number; limit?: number; search?: string; status?: string; salesApproved?: boolean; accountantApproved?: boolean } = {}) {
     const vendorProfile = await this.prisma.vendorProfile.findUnique({
       where: { userId },
     });
@@ -293,6 +381,12 @@ export class BookingsService {
     const where: any = { branch: { vendorProfileId: vendorProfile.id } };
     if (query.status) {
       where.status = query.status;
+    }
+    if (query.salesApproved !== undefined) {
+      where.salesApproved = query.salesApproved;
+    }
+    if (query.accountantApproved !== undefined) {
+      where.accountantApproved = query.accountantApproved;
     }
     if (query.search) {
       where.user = { name: { contains: query.search, mode: 'insensitive' } };
@@ -320,7 +414,7 @@ export class BookingsService {
     );
   }
 
-  async updateBookingStatus(userId: string, bookingId: string, status: any) {
+  async updateBookingStatus(userId: string, bookingId: string, status: string) {
     const vendorProfile = await this.prisma.vendorProfile.findUnique({
       where: { userId },
     });
@@ -337,6 +431,14 @@ export class BookingsService {
       throw new NotFoundException('Booking not found');
     }
 
+    // Validate status transition
+    const allowed = BookingsService.VALID_TRANSITIONS[booking.status] ?? [];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(
+        `Cannot transition from ${booking.status} to ${status}`,
+      );
+    }
+
     if (status === 'REJECTED') {
       const payment = await this.prisma.payment.findUnique({
         where: { bookingId },
@@ -351,7 +453,7 @@ export class BookingsService {
 
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
-      data: { status },
+      data: { status: status as any },
       include: {
         branch: { select: { id: true, name: true, city: true, address: true } },
         service: { select: { id: true, type: true, name: true } },
@@ -370,8 +472,81 @@ export class BookingsService {
         type: notifType,
         title: `Booking ${status === 'CONFIRMED' ? 'Confirmed' : status === 'REJECTED' ? 'Rejected' : statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1)}`,
         message: `Your booking at ${updated.branch.name} has been ${statusLabel}.`,
+        data: { bookingId: booking.id, branchId: booking.branchId },
       },
     });
+
+    return this.serializeBooking(updated);
+  }
+
+  async approveSales(userId: string, bookingId: string) {
+    return this.approveStep(userId, bookingId, 'sales');
+  }
+
+  async approveAccountant(userId: string, bookingId: string) {
+    return this.approveStep(userId, bookingId, 'accountant');
+  }
+
+  private async approveStep(userId: string, bookingId: string, step: 'sales' | 'accountant') {
+    const vendorProfile = await this.prisma.vendorProfile.findUnique({
+      where: { userId },
+    });
+    if (!vendorProfile || vendorProfile.status !== 'APPROVED') {
+      throw new ForbiddenException('Only approved vendors can approve bookings');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { branch: true },
+    });
+
+    if (!booking || booking.branch.vendorProfileId !== vendorProfile.id) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.status !== 'PENDING_APPROVAL') {
+      throw new BadRequestException('Only PENDING_APPROVAL bookings can be approved');
+    }
+
+    const updateData: any = {};
+    if (step === 'sales') {
+      if (booking.salesApproved) throw new BadRequestException('Sales already approved');
+      updateData.salesApproved = true;
+      // If accountant was already approved, auto-confirm
+      if (booking.accountantApproved) {
+        updateData.status = 'CONFIRMED';
+      }
+    } else {
+      if (booking.accountantApproved) throw new BadRequestException('Accountant already approved');
+      updateData.accountantApproved = true;
+      // If sales was already approved, auto-confirm
+      if (booking.salesApproved) {
+        updateData.status = 'CONFIRMED';
+      }
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: updateData,
+      include: {
+        branch: { select: { id: true, name: true, city: true, address: true } },
+        service: { select: { id: true, type: true, name: true } },
+        payment: true,
+      },
+    });
+
+    // Notify customer if booking was auto-confirmed
+    if (updateData.status === 'CONFIRMED') {
+      await this.prisma.notification.create({
+        data: {
+          userId: booking.userId,
+          type: 'BOOKING_CONFIRMED',
+          title: 'Booking Confirmed',
+          message: `Your booking at ${updated.branch.name} has been confirmed.`,
+          data: { bookingId: booking.id, branchId: booking.branchId },
+        },
+      });
+    }
 
     return this.serializeBooking(updated);
   }
@@ -437,6 +612,7 @@ export class BookingsService {
           type: 'BOOKING_CANCELLED',
           title: 'Booking Cancelled',
           message: `A customer has cancelled their booking at ${cancelBranch.name}.`,
+          data: { bookingId: booking.id, branchId: booking.branchId },
         },
       });
     }
@@ -465,7 +641,7 @@ export class BookingsService {
       throw new NotFoundException('Service not found or inactive');
     }
 
-    const capacity = service.capacity;
+    const capacity = service.capacity ?? 0;
 
     // Check branch status
     if (service.branch.status !== 'ACTIVE') {
@@ -621,6 +797,106 @@ export class BookingsService {
     return suggestions;
   }
 
+  async searchAvailable(query: {
+    branchId?: string;
+    capacity?: number;
+    unitType?: string;
+    startDate: string;
+    endDate?: string;
+    startTime: string;
+    endTime: string;
+    dates?: string; // comma-separated dates for multiple date mode
+  }) {
+    const { branchId, capacity, unitType, startDate, startTime, endTime, dates } = query;
+
+    // Build list of dates to check
+    const datesToCheck: string[] = [];
+    if (dates) {
+      datesToCheck.push(...dates.split(',').map(d => d.trim()).filter(Boolean));
+    } else {
+      datesToCheck.push(startDate);
+    }
+
+    const where: any = { isActive: true, branch: { status: 'ACTIVE' } };
+    if (branchId) where.branchId = branchId;
+    if (unitType) where.type = unitType;
+
+    const services = await this.prisma.service.findMany({
+      where,
+      include: {
+        branch: { select: { id: true, name: true } },
+        pricing: { where: { isActive: true }, select: { interval: true, pricingMode: true, price: true, currency: true } },
+        setupConfigs: { select: { setupType: true, minPeople: true, maxPeople: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    // Filter by capacity across setup configs or legacy capacity
+    const filteredServices = capacity
+      ? services.filter(s => {
+        if (s.setupConfigs.length > 0) {
+          return s.setupConfigs.some(c => c.minPeople <= capacity && c.maxPeople >= capacity);
+        }
+        return (s.capacity ?? 0) >= capacity;
+      })
+      : services;
+
+    const results: any[] = [];
+    for (const service of filteredServices) {
+      const effectiveCapacity = service.setupConfigs.length > 0
+        ? Math.max(...service.setupConfigs.map(c => c.maxPeople))
+        : service.capacity ?? 0;
+
+      // Check availability across ALL selected dates
+      let worstRemaining = effectiveCapacity;
+      for (const dateStr of datesToCheck) {
+        const dayStart = new Date(`${dateStr}T${startTime}:00`);
+        const dayEnd = new Date(`${dateStr}T${endTime}:00`);
+
+        const bookingCount = await this.prisma.booking.count({
+          where: {
+            serviceId: service.id,
+            status: { in: ['CONFIRMED', 'CHECKED_IN', 'PENDING', 'PENDING_APPROVAL'] },
+            startTime: { lt: dayEnd },
+            endTime: { gt: dayStart },
+          },
+        });
+
+        const remaining = effectiveCapacity - bookingCount;
+        if (remaining < worstRemaining) {
+          worstRemaining = remaining;
+        }
+      }
+
+      results.push({
+        id: service.id,
+        name: service.name,
+        unitNumber: service.unitNumber,
+        type: service.type,
+        capacity: effectiveCapacity,
+        branchName: service.branch.name,
+        branchId: service.branch.id,
+        available: worstRemaining > 0,
+        remainingSpots: Math.max(0, worstRemaining),
+        pricing: service.pricing.map(p => ({
+          interval: p.interval,
+          pricingMode: p.pricingMode,
+          price: p.price.toNumber(),
+          currency: p.currency,
+        })),
+        setupConfigs: ['MEETING_ROOM', 'EVENT_SPACE'].includes(service.type)
+          ? service.setupConfigs.map(c => ({
+              setupType: c.setupType,
+              minPeople: c.minPeople,
+              maxPeople: c.maxPeople,
+            }))
+          : [],
+      });
+    }
+
+    return results;
+  }
+
   private serializeBooking(booking: any) {
     return {
       id: booking.id,
@@ -631,6 +907,7 @@ export class BookingsService {
       totalPrice: booking.totalPrice.toNumber(),
       currency: booking.currency,
       notes: booking.notes,
+      requestedSetup: booking.requestedSetup ?? null,
       createdAt: booking.createdAt.toISOString(),
       branch: booking.branch,
       service: booking.service,

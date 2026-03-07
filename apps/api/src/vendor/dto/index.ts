@@ -1,3 +1,13 @@
 export { CreatePromoCodeDto, UpdatePromoCodeDto } from './promo-code.dto';
 export { UpdateVendorProfileDto } from './update-vendor-profile.dto';
 export { VendorReplyDto } from './vendor-reply.dto';
+export { CreateVendorBookingDto } from './create-vendor-booking.dto';
+export { CollectPaymentDto, BulkCollectPaymentDto } from './collect-payment.dto';
+export { UpdateSignatoryDto } from './update-signatory.dto';
+export { UpdateCompanyContactDto } from './update-company-contact.dto';
+export { UpdateDepartmentContactDto } from './update-department-contact.dto';
+export { UpdateBankingInfoDto } from './update-banking-info.dto';
+export { CreateVendorAddOnDto, UpdateVendorAddOnDto } from './create-vendor-addon.dto';
+export { CreateCustomerDto } from './create-customer.dto';
+export { ValidatePromoDto } from './validate-promo.dto';
+export { BookingDayDto, BookingDayAddOnDto } from './booking-day.dto';

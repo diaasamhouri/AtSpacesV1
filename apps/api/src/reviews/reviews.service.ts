@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReviewDto, ToggleFavoriteDto } from './dto';
 
@@ -14,6 +14,18 @@ export class ReviewsService {
             where: { userId_branchId: { userId, branchId: dto.branchId } },
         });
         if (existing) throw new ConflictException('You have already reviewed this branch');
+
+        // Require at least one completed booking at this branch
+        const completedBooking = await this.prisma.booking.findFirst({
+            where: {
+                userId,
+                branchId: dto.branchId,
+                status: 'COMPLETED',
+            },
+        });
+        if (!completedBooking) {
+            throw new BadRequestException('You can only review branches where you have a completed booking');
+        }
 
         // If bookingId provided, verify the booking belongs to the user
         if (dto.bookingId) {

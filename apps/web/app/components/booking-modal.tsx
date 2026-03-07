@@ -16,6 +16,7 @@ import type {
   Booking,
   AvailabilityResponse,
 } from "../../lib/types";
+import { SETUP_TYPES } from "../../lib/types";
 
 interface BookingModalProps {
   branchId: string;
@@ -100,6 +101,8 @@ export function BookingModal({
   // Step 2: Schedule
   const [date, setDate] = useState("");
   const [startHour, setStartHour] = useState("09:00");
+  const [endHour, setEndHour] = useState("");
+  const [endHourManual, setEndHourManual] = useState(false);
   const [numberOfPeople, setNumberOfPeople] = useState(1);
   const [availabilityMsg, setAvailabilityMsg] = useState("");
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
@@ -113,6 +116,7 @@ export function BookingModal({
   const [cardCvv, setCardCvv] = useState("");
   const [cardName, setCardName] = useState("");
   const [notes, setNotes] = useState("");
+  const [requestedSetup, setRequestedSetup] = useState("");
   const [promoCode, setPromoCode] = useState("");
   const [promoDiscount, setPromoDiscount] = useState<number | null>(null);
   const [promoError, setPromoError] = useState("");
@@ -131,6 +135,8 @@ export function BookingModal({
       setSelectedInterval(null);
       setDate("");
       setStartHour("09:00");
+      setEndHour("");
+      setEndHourManual(false);
       setNumberOfPeople(1);
       setAvailabilityMsg("");
       setIsAvailable(null);
@@ -142,6 +148,7 @@ export function BookingModal({
       setCardCvv("");
       setCardName("");
       setNotes("");
+      setRequestedSetup("");
       setPromoCode("");
       setPromoDiscount(null);
       setPromoError("");
@@ -150,18 +157,32 @@ export function BookingModal({
     }
   }, [isOpen]);
 
-  // Compute end time based on interval
+  // Duration hours map per interval
+  const INTERVAL_HOURS: Record<PricingInterval, number> = {
+    HOURLY: 1,
+    HALF_DAY: 4,
+    DAILY: 8,
+    WEEKLY: 8 * 5,
+    MONTHLY: 8 * 22,
+  };
+
+  // Auto-compute endHour when startHour or interval changes (unless manually overridden)
+  useEffect(() => {
+    if (!selectedInterval || !startHour || endHourManual) return;
+    const [hh, mm] = startHour.split(":").map(Number);
+    if (hh === undefined || mm === undefined) return;
+    const totalMinutes = hh * 60 + mm + INTERVAL_HOURS[selectedInterval] * 60;
+    const endH = Math.floor(totalMinutes / 60) % 24;
+    const endM = totalMinutes % 60;
+    setEndHour(`${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startHour, selectedInterval, endHourManual]);
+
+  // Compute end time based on interval (for ISO)
   const computeEndTime = useCallback(
     (startIso: string, interval: PricingInterval): string => {
       const start = new Date(startIso);
-      const hoursMap: Record<PricingInterval, number> = {
-        HOURLY: 1,
-        HALF_DAY: 4,
-        DAILY: 8,
-        WEEKLY: 8 * 5,
-        MONTHLY: 8 * 22,
-      };
-      start.setHours(start.getHours() + hoursMap[interval]);
+      start.setHours(start.getHours() + INTERVAL_HOURS[interval]);
       return start.toISOString();
     },
     [],
@@ -174,10 +195,16 @@ export function BookingModal({
 
   const startTimeIso =
     date && startHour ? new Date(`${date}T${startHour}:00`).toISOString() : "";
-  const endTimeIso =
-    startTimeIso && selectedInterval
-      ? computeEndTime(startTimeIso, selectedInterval)
-      : "";
+  // Use manual endHour if set, otherwise compute from interval
+  const endTimeIso = (() => {
+    if (date && endHour) {
+      return new Date(`${date}T${endHour}:00`).toISOString();
+    }
+    if (startTimeIso && selectedInterval) {
+      return computeEndTime(startTimeIso, selectedInterval);
+    }
+    return "";
+  })();
 
   // Derive operating hours for the selected day
   const selectedDayHours = useMemo(() => {
@@ -299,6 +326,7 @@ export function BookingModal({
         paymentMethod,
         notes: notes || undefined,
         promoCode: promoCode || undefined,
+        requestedSetup: requestedSetup || undefined,
       });
       setBooking(result);
       setStep("success");
@@ -324,9 +352,9 @@ export function BookingModal({
       />
 
       {/* Modal */}
-      <div className="relative h-full w-full sm:mx-4 sm:h-auto sm:max-w-lg sm:max-h-[90vh] sm:rounded-2xl rounded-none bg-dark-900 border-0 sm:border border-slate-200 dark:border-slate-800 shadow-float overflow-y-auto flex flex-col">
+      <div className="relative h-full w-full sm:mx-4 sm:h-auto sm:max-w-lg sm:max-h-[90vh] sm:rounded-2xl rounded-none bg-white dark:bg-dark-900 border-0 sm:border border-slate-200 dark:border-slate-800 shadow-float overflow-y-auto flex flex-col">
         {/* Sticky header on mobile */}
-        <div className="sticky top-0 z-10 bg-dark-900 border-b border-slate-200 dark:border-slate-800 sm:border-b-0 px-6 pt-6 pb-4 sm:pb-0 flex items-center justify-between shrink-0">
+        <div className="sticky top-0 z-10 bg-white dark:bg-dark-900 border-b border-slate-200 dark:border-slate-800 sm:border-b-0 px-6 pt-6 pb-4 sm:pb-0 flex items-center justify-between shrink-0">
           {/* Header */}
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
             {step === "success" ? "Booking Confirmed" : `Book at ${branchName}`}
@@ -414,8 +442,8 @@ export function BookingModal({
                       {service.name}
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Capacity: {service.capacity}{" "}
-                      {service.capacity === 1 ? "person" : "people"}
+                      Capacity: {service.capacity ?? 0}{" "}
+                      {(service.capacity ?? 0) === 1 ? "person" : "people"}
                     </p>
                   </div>
                   {selectedService?.id === service.id && (
@@ -446,7 +474,7 @@ export function BookingModal({
                         }}
                         className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${selectedInterval === p.interval
                           ? "bg-brand-500 text-white"
-                          : "bg-dark-800 text-slate-600 dark:text-slate-300 hover:bg-dark-700"
+                          : "bg-white dark:bg-dark-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-dark-700"
                           }`}
                       >
                         <span className="block text-xs capitalize opacity-80">
@@ -517,7 +545,7 @@ export function BookingModal({
                 min={minDate}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
+                className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
               />
               {/* Operating hours hint or closed warning */}
               {date && selectedDayHours === null && operatingHours && (
@@ -532,23 +560,54 @@ export function BookingModal({
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
-                Start time
-                {selectedDayHours && (
-                  <span className="ml-1 text-xs text-slate-500 font-normal">
-                    ({selectedDayHours.open} - {selectedDayHours.close})
-                  </span>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
+                  Start time
+                  {selectedDayHours && (
+                    <span className="ml-1 text-xs text-slate-500 font-normal">
+                      ({selectedDayHours.open})
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="time"
+                  value={startHour}
+                  min={selectedDayHours?.open}
+                  max={selectedDayHours?.close}
+                  onChange={(e) => {
+                    setStartHour(e.target.value);
+                    setEndHourManual(false);
+                  }}
+                  className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
+                  End time
+                  {selectedDayHours && (
+                    <span className="ml-1 text-xs text-slate-500 font-normal">
+                      ({selectedDayHours.close})
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="time"
+                  value={endHour}
+                  min={startHour}
+                  max={selectedDayHours?.close}
+                  onChange={(e) => {
+                    setEndHour(e.target.value);
+                    setEndHourManual(true);
+                  }}
+                  className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
+                />
+                {!endHourManual && selectedInterval && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Auto-calculated from {selectedInterval.toLowerCase().replace("_", " ")} interval
+                  </p>
                 )}
-              </label>
-              <input
-                type="time"
-                value={startHour}
-                min={selectedDayHours?.open}
-                max={selectedDayHours?.close}
-                onChange={(e) => setStartHour(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
-              />
+              </div>
             </div>
 
             <div>
@@ -561,12 +620,31 @@ export function BookingModal({
                 max={selectedService?.capacity || 1}
                 value={numberOfPeople}
                 onChange={(e) => setNumberOfPeople(Number(e.target.value))}
-                className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
+                className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
               />
               <p className="mt-1 text-xs text-slate-500">
                 Max {selectedService?.capacity || 1}
               </p>
             </div>
+
+            {/* Preferred Room Setup — only for MEETING_ROOM / EVENT_SPACE */}
+            {selectedService && (selectedService.type === "MEETING_ROOM" || selectedService.type === "EVENT_SPACE") && (
+              <div>
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
+                  Preferred Room Setup <span className="text-xs text-slate-500">(Optional)</span>
+                </label>
+                <select
+                  value={requestedSetup}
+                  onChange={(e) => setRequestedSetup(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
+                >
+                  <option value="">No preference</option>
+                  {SETUP_TYPES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Visual capacity bar */}
             {availabilityResult && (
@@ -648,7 +726,7 @@ export function BookingModal({
               type="button"
               disabled={!date || checkingAvailability}
               onClick={runAvailabilityCheck}
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-dark-850 disabled:opacity-50"
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 dark:hover:bg-dark-850 disabled:opacity-50"
             >
               {checkingAvailability ? "Checking..." : "Re-check Availability"}
             </button>
@@ -681,7 +759,7 @@ export function BookingModal({
             </p>
 
             {/* Summary card */}
-            <div className="rounded-xl bg-dark-850 border border-slate-200 dark:border-slate-800 p-4">
+            <div className="rounded-xl bg-slate-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-800 p-4">
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-slate-500 dark:text-slate-400">Service</span>
@@ -700,7 +778,7 @@ export function BookingModal({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 dark:text-slate-400">Time</span>
-                  <span className="font-medium text-gray-900 dark:text-white">{startHour}</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{startHour} - {endHour || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 dark:text-slate-400">Duration</span>
@@ -749,13 +827,13 @@ export function BookingModal({
                     }
                   }}
                   placeholder="e.g. SUMMER20"
-                  className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500 uppercase"
+                  className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500 uppercase"
                 />
                 <button
                   type="button"
                   disabled={!promoCode || verifyingPromo}
                   onClick={handleVerifyPromo}
-                  className="rounded-lg bg-dark-800 px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-dark-700 disabled:opacity-50"
+                  className="rounded-lg bg-white dark:bg-dark-800 px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-200 dark:hover:bg-dark-700 disabled:opacity-50"
                 >
                   {verifyingPromo ? "..." : "Apply"}
                 </button>
@@ -811,7 +889,7 @@ export function BookingModal({
 
             {/* Card details (Visa / Mastercard) */}
             {requiresCardDetails && (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-dark-850 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="flex items-center gap-2 mb-1">
                   <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
@@ -830,7 +908,7 @@ export function BookingModal({
                       onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
                       placeholder="0000 0000 0000 0000"
                       maxLength={19}
-                      className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-900 pl-4 pr-12 py-2.5 text-sm text-gray-900 dark:text-white font-mono tracking-wider focus:border-brand-500 focus:ring-brand-500"
+                      className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 pl-4 pr-12 py-2.5 text-sm text-gray-900 dark:text-white font-mono tracking-wider focus:border-brand-500 focus:ring-brand-500"
                     />
                     {/* Card brand icon in the input */}
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -862,7 +940,7 @@ export function BookingModal({
                       onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
                       placeholder="MM/YY"
                       maxLength={5}
-                      className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white font-mono tracking-wider focus:border-brand-500 focus:ring-brand-500"
+                      className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white font-mono tracking-wider focus:border-brand-500 focus:ring-brand-500"
                     />
                   </div>
                   <div>
@@ -875,7 +953,7 @@ export function BookingModal({
                         onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
                         placeholder="***"
                         maxLength={4}
-                        className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white font-mono tracking-wider focus:border-brand-500 focus:ring-brand-500"
+                        className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white font-mono tracking-wider focus:border-brand-500 focus:ring-brand-500"
                       />
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
                         <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
@@ -894,7 +972,7 @@ export function BookingModal({
                     value={cardName}
                     onChange={(e) => setCardName(e.target.value)}
                     placeholder="Full name on card"
-                    className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
+                    className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
                   />
                 </div>
               </div>
@@ -902,7 +980,7 @@ export function BookingModal({
 
             {/* Apple Pay notice */}
             {paymentMethod === "APPLE_PAY" && (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-dark-850 p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
                 <svg viewBox="0 0 24 24" className="h-6 w-6 shrink-0 text-slate-400" fill="currentColor">
                   <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09ZM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25Z" />
                 </svg>
@@ -923,7 +1001,7 @@ export function BookingModal({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
+                className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
                 placeholder="Any special requirements..."
               />
             </div>
@@ -976,7 +1054,7 @@ export function BookingModal({
                   : "Please pay at the location upon arrival."}
               </p>
             </div>
-            <div className="rounded-xl bg-dark-850 border border-slate-200 dark:border-slate-800 p-4 text-left text-sm">
+            <div className="rounded-xl bg-slate-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-800 p-4 text-left text-sm">
               <p className="text-slate-500 dark:text-slate-400">
                 Booking ID:{" "}
                 <span className="font-mono text-gray-900 dark:text-white">

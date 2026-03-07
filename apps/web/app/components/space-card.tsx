@@ -29,10 +29,10 @@ export function SpaceCard({ branch, index = 0 }: SpaceCardProps) {
     >
       <Link
         href={`/spaces/${branch.id}`}
-        className="group flex flex-col overflow-hidden rounded-[2rem] bg-dark-900 border border-slate-200 dark:border-slate-800 shadow-float transition-all duration-300 hover:border-brand-500/50 hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:-translate-y-1 block h-full"
+        className="group flex flex-col overflow-hidden rounded-[2rem] bg-white dark:bg-dark-900 border border-slate-200 dark:border-slate-800 shadow-float transition-all duration-300 hover:border-brand-500/50 hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:-translate-y-1 block h-full"
       >
         {/* Image */}
-        <div className="relative aspect-[4/3] w-full overflow-hidden bg-dark-850 p-2">
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100 dark:bg-dark-850 p-2">
           <div className="relative h-full w-full overflow-hidden rounded-[1.5rem]">
             <Image
               src={imageUrl}

@@ -74,17 +74,54 @@ export class BookingsController {
     return this.bookingsService.verifyPromoCode(code, serviceId);
   }
 
+  @Get('search-available')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Search for available services/rooms' })
+  async searchAvailable(
+    @Query('branchId') branchId?: string,
+    @Query('capacity') capacity?: string,
+    @Query('unitType') unitType?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('startTime') startTime?: string,
+    @Query('endTime') endTime?: string,
+    @Query('dates') dates?: string,
+  ) {
+    return this.bookingsService.searchAvailable({
+      branchId,
+      capacity: capacity ? parseInt(capacity, 10) : undefined,
+      unitType,
+      startDate: startDate || new Date().toISOString().split('T')[0],
+      endDate,
+      startTime: startTime || '09:00',
+      endTime: endTime || '17:00',
+      dates,
+    });
+  }
+
   // ==================== VENDOR ENDPOINTS ====================
 
   @Get('vendor')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all bookings for vendor branches' })
-  async getVendorBookings(@Req() req: any, @Query('page') page?: string, @Query('limit') limit?: string, @Query('search') search?: string) {
+  async getVendorBookings(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('salesApproved') salesApproved?: string,
+    @Query('accountantApproved') accountantApproved?: string,
+  ) {
     return this.bookingsService.getVendorBookings(req.user.id, {
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       search,
+      status,
+      salesApproved: salesApproved !== undefined ? salesApproved === 'true' : undefined,
+      accountantApproved: accountantApproved !== undefined ? accountantApproved === 'true' : undefined,
     });
   }
 
@@ -95,9 +132,25 @@ export class BookingsController {
   async updateBookingStatus(
     @Req() req: any,
     @Param('id') id: string,
-    @Body('status') status: any,
+    @Body('status') status: string,
   ) {
     return this.bookingsService.updateBookingStatus(req.user.id, id, status);
+  }
+
+  @Patch(':id/approve-sales')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Approve booking from sales perspective (Vendor)' })
+  async approveSales(@Req() req: any, @Param('id') id: string) {
+    return this.bookingsService.approveSales(req.user.id, id);
+  }
+
+  @Patch(':id/approve-accountant')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Approve booking from accountant perspective (Vendor)' })
+  async approveAccountant(@Req() req: any, @Param('id') id: string) {
+    return this.bookingsService.approveAccountant(req.user.id, id);
   }
 
   @Get(':id')

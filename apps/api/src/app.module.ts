@@ -13,6 +13,8 @@ import { AdminModule } from './admin/admin.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { ContactModule } from './contact/contact.module';
+import { QuotationsModule } from './quotations/quotations.module';
+import { InvoicesModule } from './invoices/invoices.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { ContactModule } from './contact/contact.module';
     UploadsModule,
     ReviewsModule,
     ContactModule,
+    QuotationsModule,
+    InvoicesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

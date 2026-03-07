@@ -100,7 +100,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
 
             {/* Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} className="mb-8 rounded-2xl border border-slate-200 dark:border-slate-800 bg-dark-850 p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="mb-8 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-dark-850 p-6 space-y-4">
                     {error && <div className="rounded-xl bg-red-500/10 p-3 text-sm text-red-400 border border-red-500/20">{error}</div>}
                     <div>
                         <label className="block text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Rating</label>
@@ -120,7 +120,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
                         <label className="block text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">Comment (optional)</label>
                         <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)}
                             placeholder="Share your experience..."
-                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-900 text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500" />
+                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-900 text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500" />
                     </div>
                     <div className="flex gap-2">
                         <button type="submit" disabled={submitting}
@@ -128,7 +128,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
                             {submitting ? "Submitting..." : "Submit Review"}
                         </button>
                         <button type="button" onClick={() => setShowForm(false)}
-                            className="rounded-xl bg-dark-800 px-6 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-dark-700 transition-colors">
+                            className="rounded-xl bg-white dark:bg-dark-800 px-6 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-dark-700 transition-colors">
                             Cancel
                         </button>
                     </div>
@@ -141,7 +141,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
             ) : (
                 <div className="space-y-4">
                     {reviews.map((review: any) => (
-                        <div key={review.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-dark-900 p-5">
+                        <div key={review.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-5">
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500/10 text-brand-500 font-bold text-sm">
@@ -172,7 +172,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
                             )}
 
                             {review.vendorReply && (
-                                <div className="mt-4 rounded-xl bg-dark-850 border border-slate-200 dark:border-slate-800 p-4">
+                                <div className="mt-4 rounded-xl bg-slate-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-800 p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest">
                                             Host Reply

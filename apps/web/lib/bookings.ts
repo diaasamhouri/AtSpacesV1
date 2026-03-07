@@ -16,6 +16,7 @@ export interface CreateBookingData {
   paymentMethod: PaymentMethod;
   notes?: string;
   promoCode?: string;
+  requestedSetup?: string;
 }
 
 export async function createBooking(

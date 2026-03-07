@@ -93,16 +93,16 @@ export function AuthDialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-md overflow-hidden rounded-[2rem] bg-dark-900 shadow-2xl ring-1 ring-slate-800 border border-slate-200 dark:border-slate-700/50"
+            className="relative w-full max-w-md overflow-hidden rounded-[2rem] bg-white dark:bg-dark-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 border border-slate-200 dark:border-slate-700/50"
             role="dialog"
             aria-modal="true"
           >
             {/* Header pattern */}
-            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-br from-dark-850 to-dark-900 border-b border-slate-200 dark:border-slate-800" />
+            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-dark-850 dark:to-dark-900 border-b border-slate-200 dark:border-slate-800" />
 
             <button
               onClick={onClose}
-              className="absolute right-6 top-6 z-10 p-2 rounded-full bg-dark-800/50 hover:bg-gray-100 dark:hover:bg-dark-800 text-slate-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors backdrop-blur-md"
+              className="absolute right-6 top-6 z-10 p-2 rounded-full bg-slate-200/50 dark:bg-dark-800/50 hover:bg-gray-100 dark:hover:bg-dark-800 text-slate-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white transition-colors backdrop-blur-md"
             >
               <span className="sr-only">Close</span>
               <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -141,7 +141,7 @@ export function AuthDialog({
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 py-3 px-4 text-gray-900 dark:text-white shadow-sm ring-0 placeholder:text-slate-500 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 sm:text-sm sm:leading-6"
+                      className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 py-3 px-4 text-gray-900 dark:text-white shadow-sm ring-0 placeholder:text-slate-500 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 sm:text-sm sm:leading-6"
                     />
                   </div>
                 </div>
@@ -162,7 +162,7 @@ export function AuthDialog({
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 py-3 px-4 text-gray-900 dark:text-white shadow-sm ring-0 placeholder:text-slate-500 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 sm:text-sm sm:leading-6"
+                      className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 py-3 px-4 text-gray-900 dark:text-white shadow-sm ring-0 placeholder:text-slate-500 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 sm:text-sm sm:leading-6"
                     />
                   </div>
                 </div>

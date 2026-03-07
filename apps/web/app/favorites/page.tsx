@@ -80,7 +80,7 @@ export default function FavoritesPage() {
                         const types = [...new Set((branch.services || []).map((s: any) => s.type))] as string[];
                         return (
                             <Link key={fav.id} href={`/spaces/${branch.id}`}
-                                className="group flex flex-col overflow-hidden rounded-[2rem] bg-dark-900 border border-slate-200 dark:border-slate-800 transition-all hover:border-brand-500/50 hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:-translate-y-1">
+                                className="group flex flex-col overflow-hidden rounded-[2rem] bg-white dark:bg-dark-900 border border-slate-200 dark:border-slate-800 transition-all hover:border-brand-500/50 hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:-translate-y-1">
                                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-dark-800">
                                     <Image src={imageUrl} alt={branch.name} fill className="object-cover transition-transform duration-700 group-hover:scale-105"
                                         sizes="(max-width: 640px) 100vw, 33vw" unoptimized={!imageUrl.startsWith("https://")} />

@@ -65,7 +65,7 @@ export function SearchBar({ defaultValue = '', placeholder = 'Search by name, lo
         value={value}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-white shadow-inner placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
+        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-white shadow-inner placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors"
       />
     </div>
   );

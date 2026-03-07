@@ -165,7 +165,7 @@ export function Navbar() {
                       transition={{ duration: 0.15, ease: "easeOut" }}
                       className="absolute right-0 top-12 mt-2 w-56 rounded-2xl glass-panel shadow-float origin-top-right overflow-hidden z-50"
                     >
-                      <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3 bg-dark-850">
+                      <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3 bg-white dark:bg-dark-850">
                         <p className="truncate text-sm font-bold text-gray-900 dark:text-white">
                           {user.name || "User"}
                         </p>
@@ -301,7 +301,7 @@ export function Navbar() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed top-0 right-0 bottom-0 w-80 max-w-[85vw] bg-dark-900 border-l border-slate-200 dark:border-slate-800 shadow-float z-50 pointer-events-auto md:hidden overflow-y-auto"
+              className="fixed top-0 right-0 bottom-0 w-80 max-w-[85vw] bg-white dark:bg-dark-900 border-l border-slate-200 dark:border-slate-800 shadow-float z-50 pointer-events-auto md:hidden overflow-y-auto"
             >
               {/* Drawer header */}
               <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
@@ -372,7 +372,7 @@ export function Navbar() {
                 <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-800">
                   {user ? (
                     <div className="space-y-1">
-                      <div className="px-4 py-3 mb-3 bg-dark-850 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <div className="px-4 py-3 mb-3 bg-white dark:bg-dark-850 rounded-xl border border-slate-200 dark:border-slate-800">
                         <p className="text-sm font-bold text-gray-900 dark:text-white">{user.name}</p>
                         <p className="text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
                       </div>
@@ -435,7 +435,7 @@ export function Navbar() {
                       </Link>
                       <Link
                         href="/auth/login"
-                        className="flex justify-center rounded-xl border border-slate-300 dark:border-slate-600 bg-dark-850 px-4 py-3.5 text-sm font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors"
+                        className="flex justify-center rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-dark-850 px-4 py-3.5 text-sm font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors"
                         onClick={() => setMobileMenuOpen(false)}
                       >
                         Log In

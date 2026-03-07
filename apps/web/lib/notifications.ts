@@ -12,6 +12,56 @@ export interface Notification {
   createdAt: string;
 }
 
+export function getNotificationLink(
+  notification: { type: string; data: Record<string, unknown> | null },
+  userRole: string,
+): string | null {
+  const d = notification.data;
+  if (!d) return null;
+
+  const bookingId = d.bookingId as string | undefined;
+  const vendorProfileId = d.vendorProfileId as string | undefined;
+  const branchId = d.branchId as string | undefined;
+  const reviewId = d.reviewId as string | undefined;
+
+  switch (notification.type) {
+    case 'BOOKING_CONFIRMED':
+    case 'BOOKING_CANCELLED':
+      if (bookingId) {
+        if (userRole === 'VENDOR') return '/vendor/bookings/overview';
+        if (userRole === 'ADMIN' || userRole === 'MODERATOR') return '/admin/bookings/overview';
+        return `/bookings/${bookingId}`;
+      }
+      return null;
+
+    case 'VENDOR_APPROVED':
+    case 'VENDOR_REJECTED':
+      return '/vendor/profile';
+
+    case 'APPROVAL_REQUEST':
+      if (vendorProfileId) return `/admin/vendors/${vendorProfileId}`;
+      return null;
+
+    case 'PAYMENT_SUCCESS':
+      if (bookingId) return `/bookings/${bookingId}`;
+      return null;
+
+    case 'GENERAL':
+    default:
+      if (reviewId && branchId) return `/spaces/${branchId}`;
+      if (bookingId) {
+        if (userRole === 'VENDOR') return '/vendor/bookings/overview';
+        if (userRole === 'ADMIN' || userRole === 'MODERATOR') return '/admin/bookings/overview';
+        return `/bookings/${bookingId}`;
+      }
+      if (vendorProfileId) {
+        if (userRole === 'VENDOR') return '/vendor/profile';
+        if (userRole === 'ADMIN' || userRole === 'MODERATOR') return `/admin/vendors/${vendorProfileId}`;
+      }
+      return null;
+  }
+}
+
 export async function getNotifications(
   token: string,
   params?: { page?: number; limit?: number },

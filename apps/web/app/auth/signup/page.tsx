@@ -61,7 +61,7 @@ export default function SignupPage() {
         {/* Google OAuth */}
         <a
           href={`${API_BASE_URL}/auth/google`}
-          className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-850 px-4 py-3 text-sm font-bold text-slate-600 dark:text-slate-300 shadow-sm hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors"
+          className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm font-bold text-slate-600 dark:text-slate-300 shadow-sm hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
@@ -77,7 +77,7 @@ export default function SignupPage() {
             <div className="w-full border-t border-slate-200 dark:border-slate-800" />
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="bg-dark-950 px-4 text-slate-500 font-medium">
+            <span className="bg-white dark:bg-dark-950 px-4 text-slate-500 font-medium">
               or sign up with email
             </span>
           </div>
@@ -103,7 +103,7 @@ export default function SignupPage() {
               name="name"
               type="text"
               autoComplete="name"
-              className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500"
+              className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500"
               placeholder="Ahmad"
             />
           </div>
@@ -121,7 +121,7 @@ export default function SignupPage() {
               required
               autoComplete="email"
               inputMode="email"
-              className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500"
+              className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500"
               placeholder="you@example.com"
             />
           </div>
@@ -138,7 +138,7 @@ export default function SignupPage() {
               type="password"
               required
               autoComplete="new-password"
-              className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-dark-900 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500"
+              className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-4 py-3 text-sm text-gray-900 dark:text-white shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500"
               placeholder="Min. 8 characters"
             />
           </div>

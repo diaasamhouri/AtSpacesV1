@@ -51,12 +51,29 @@ export default function VendorBranchDetailPage() {
     // Add service state
     const [showAddService, setShowAddService] = useState(false);
     const [submittingService, setSubmittingService] = useState(false);
-    const [newService, setNewService] = useState({ type: "HOT_DESK", name: "", capacity: 1, priceHourly: "", priceDaily: "", priceMonthly: "" });
+    const [newService, setNewService] = useState({
+        type: "HOT_DESK", name: "", unitNumber: "", priceHourly: "", priceDaily: "", priceMonthly: "",
+        floor: "", profileNameEn: "", profileNameAr: "", weight: "", netSize: "",
+        shape: "", description: "", features: [] as string[],
+        setupConfigs: [] as { setupType: string; minPeople: number; maxPeople: number }[],
+    });
+    const [newFeatureInput, setNewFeatureInput] = useState("");
 
     // Edit service state
     const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
-    const [editService, setEditService] = useState({ name: "", capacity: 1, priceHourly: "", priceDaily: "", priceMonthly: "" });
+    const [editService, setEditService] = useState({
+        name: "", unitNumber: "", priceHourly: "", priceDaily: "", priceMonthly: "",
+        floor: "", profileNameEn: "", profileNameAr: "", weight: "", netSize: "",
+        shape: "", description: "", features: [] as string[],
+        setupConfigs: [] as { setupType: string; minPeople: number; maxPeople: number }[],
+    });
+    const [editFeatureInput, setEditFeatureInput] = useState("");
     const [savingEdit, setSavingEdit] = useState(false);
+
+    // Property details state
+    const [editingProperty, setEditingProperty] = useState(false);
+    const [propertyData, setPropertyData] = useState({ grossArea: "", receptionMobile: "", receptionEmail: "" });
+    const [savingProperty, setSavingProperty] = useState(false);
 
     // Amenities edit state
     const [editingAmenities, setEditingAmenities] = useState(false);
@@ -107,6 +124,29 @@ export default function VendorBranchDetailPage() {
         }
     };
 
+    // === Property Details handlers ===
+    const initProperty = () => {
+        setPropertyData({
+            grossArea: (branch as any)?.grossArea?.toString() || "",
+            receptionMobile: (branch as any)?.receptionMobile || "",
+            receptionEmail: (branch as any)?.receptionEmail || "",
+        });
+    };
+    const handleSaveProperty = async () => {
+        if (!token) return;
+        setSavingProperty(true);
+        try {
+            const data: any = {};
+            if (propertyData.grossArea) data.grossArea = Number(propertyData.grossArea);
+            if (propertyData.receptionMobile) data.receptionMobile = propertyData.receptionMobile;
+            if (propertyData.receptionEmail) data.receptionEmail = propertyData.receptionEmail;
+            await updateBranch(token, id, data);
+            setEditingProperty(false);
+            loadBranch();
+        } catch { toast("Failed to save property details.", "error"); }
+        setSavingProperty(false);
+    };
+
     // === Service handlers ===
     const handleAddService = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -118,9 +158,27 @@ export default function VendorBranchDetailPage() {
             if (newService.priceDaily) pricing.push({ interval: "DAILY", price: Number(newService.priceDaily) });
             if (newService.priceMonthly) pricing.push({ interval: "MONTHLY", price: Number(newService.priceMonthly) });
             if (pricing.length === 0) throw new Error("Add at least one price interval.");
-            await createService(token, { branchId: id, type: newService.type, name: newService.name, capacity: Number(newService.capacity), pricing });
+            const payload: any = {
+                branchId: id, type: newService.type, name: newService.name, pricing,
+            };
+            if (newService.unitNumber) payload.unitNumber = newService.unitNumber;
+            if (newService.setupConfigs.length > 0) payload.setupConfigs = newService.setupConfigs;
+            if (newService.floor) payload.floor = newService.floor;
+            if (newService.profileNameEn) payload.profileNameEn = newService.profileNameEn;
+            if (newService.profileNameAr) payload.profileNameAr = newService.profileNameAr;
+            if (newService.weight) payload.weight = Number(newService.weight);
+            if (newService.netSize) payload.netSize = Number(newService.netSize);
+            if (newService.shape) payload.shape = newService.shape;
+            if (newService.description) payload.description = newService.description;
+            if (newService.features.length > 0) payload.features = newService.features;
+            await createService(token, payload);
             setShowAddService(false);
-            setNewService({ type: "HOT_DESK", name: "", capacity: 1, priceHourly: "", priceDaily: "", priceMonthly: "" });
+            setNewService({
+                type: "HOT_DESK", name: "", unitNumber: "", priceHourly: "", priceDaily: "", priceMonthly: "",
+                floor: "", profileNameEn: "", profileNameAr: "", weight: "", netSize: "",
+                shape: "", description: "", features: [], setupConfigs: [],
+            });
+            setNewFeatureInput("");
             loadBranch();
         } catch (err: any) { toast(err.message || "Failed to add service", "error"); }
         setSubmittingService(false);
@@ -142,11 +200,17 @@ export default function VendorBranchDetailPage() {
     const startEdit = (svc: any) => {
         setEditingServiceId(svc.id);
         setEditService({
-            name: svc.name || "", capacity: svc.capacity || 1,
+            name: svc.name || "", unitNumber: svc.unitNumber || "",
             priceHourly: svc.pricing?.find((p: any) => p.interval === "HOURLY")?.price?.toString() || "",
             priceDaily: svc.pricing?.find((p: any) => p.interval === "DAILY")?.price?.toString() || "",
             priceMonthly: svc.pricing?.find((p: any) => p.interval === "MONTHLY")?.price?.toString() || "",
+            floor: svc.floor || "", profileNameEn: svc.profileNameEn || "", profileNameAr: svc.profileNameAr || "",
+            weight: svc.weight != null ? String(svc.weight) : "", netSize: svc.netSize != null ? String(svc.netSize) : "",
+            shape: svc.shape || "", description: svc.description || "",
+            features: svc.features || [],
+            setupConfigs: (svc.setupConfigs || []).map((sc: any) => ({ setupType: sc.setupType, minPeople: sc.minPeople, maxPeople: sc.maxPeople })),
         });
+        setEditFeatureInput("");
     };
 
     const handleSaveEdit = async () => {
@@ -158,7 +222,18 @@ export default function VendorBranchDetailPage() {
             if (editService.priceDaily) pricing.push({ interval: "DAILY", price: Number(editService.priceDaily) });
             if (editService.priceMonthly) pricing.push({ interval: "MONTHLY", price: Number(editService.priceMonthly) });
             if (pricing.length === 0) throw new Error("At least one price required.");
-            await updateService(token, editingServiceId, { name: editService.name, capacity: Number(editService.capacity), pricing });
+            const payload: any = { name: editService.name, pricing };
+            payload.unitNumber = editService.unitNumber || undefined;
+            payload.setupConfigs = editService.setupConfigs.length > 0 ? editService.setupConfigs : undefined;
+            payload.floor = editService.floor || undefined;
+            payload.profileNameEn = editService.profileNameEn || undefined;
+            payload.profileNameAr = editService.profileNameAr || undefined;
+            payload.weight = editService.weight ? Number(editService.weight) : undefined;
+            payload.netSize = editService.netSize ? Number(editService.netSize) : undefined;
+            payload.shape = editService.shape || undefined;
+            payload.description = editService.description || undefined;
+            payload.features = editService.features;
+            await updateService(token, editingServiceId, payload);
             setEditingServiceId(null);
             loadBranch();
         } catch (err: any) { toast(err.message || "Failed to update service.", "error"); }
@@ -242,7 +317,7 @@ export default function VendorBranchDetailPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{branch.name}</h1>
@@ -257,7 +332,7 @@ export default function VendorBranchDetailPage() {
             </div>
 
             {/* Booking Settings */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <div>
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Booking Settings</h2>
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
@@ -270,14 +345,66 @@ export default function VendorBranchDetailPage() {
                         }`}
                 >
                     <span
-                        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-dark-900 shadow ring-0 transition duration-200 ease-in-out ${branch.autoAcceptBookings ? 'translate-x-5' : 'translate-x-0'
+                        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white dark:bg-dark-900 shadow ring-0 transition duration-200 ease-in-out ${branch.autoAcceptBookings ? 'translate-x-5' : 'translate-x-0'
                             }`}
                     />
                 </button>
             </div>
 
+            {/* Property Details */}
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Property Details</h2>
+                    <button onClick={() => { setEditingProperty(!editingProperty); if (!editingProperty) initProperty(); }}
+                        className="text-xs font-bold text-brand-500 hover:text-brand-400 transition-colors">
+                        {editingProperty ? "Cancel" : "Edit"}
+                    </button>
+                </div>
+                {editingProperty ? (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Gross Area (sqm)</label>
+                                <input type="number" step="0.01" value={propertyData.grossArea} onChange={(e) => setPropertyData({ ...propertyData, grossArea: e.target.value })}
+                                    placeholder="e.g. 150" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Reception Mobile</label>
+                                <input type="text" value={propertyData.receptionMobile} onChange={(e) => setPropertyData({ ...propertyData, receptionMobile: e.target.value })}
+                                    placeholder="+962 7XX XXX XXXX" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Reception Email</label>
+                                <input type="email" value={propertyData.receptionEmail} onChange={(e) => setPropertyData({ ...propertyData, receptionEmail: e.target.value })}
+                                    placeholder="reception@branch.com" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            </div>
+                        </div>
+                        <div className="flex justify-end pt-2">
+                            <button onClick={handleSaveProperty} disabled={savingProperty} className="rounded-xl bg-brand-500 active:scale-95 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-all shadow-sm">
+                                {savingProperty ? "Saving..." : "Save Property Details"}
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="rounded-xl bg-gray-50 dark:bg-dark-850 px-4 py-3 border border-slate-200 dark:border-slate-700">
+                            <div className="text-xs font-bold text-slate-500 mb-1">Gross Area</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{(branch as any)?.grossArea ? `${(branch as any).grossArea} sqm` : "Not set"}</div>
+                        </div>
+                        <div className="rounded-xl bg-gray-50 dark:bg-dark-850 px-4 py-3 border border-slate-200 dark:border-slate-700">
+                            <div className="text-xs font-bold text-slate-500 mb-1">Reception Mobile</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{(branch as any)?.receptionMobile || "Not set"}</div>
+                        </div>
+                        <div className="rounded-xl bg-gray-50 dark:bg-dark-850 px-4 py-3 border border-slate-200 dark:border-slate-700">
+                            <div className="text-xs font-bold text-slate-500 mb-1">Reception Email</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{(branch as any)?.receptionEmail || "Not set"}</div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
             {/* Location / Map */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Location</h2>
                     <button onClick={() => setEditingMap(!editingMap)} className="text-xs font-bold text-brand-500 hover:text-brand-400 transition-colors">
@@ -289,11 +416,11 @@ export default function VendorBranchDetailPage() {
                     <div className="space-y-4">
                         <input type="url" placeholder="Paste Google Maps link..." value={googleMapsUrl}
                             onChange={(e) => handleGoogleMapsChange(e.target.value)}
-                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
+                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
                         {mapCoords && (
                             <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">
                                 <MapDisplay lat={mapCoords.lat} lng={mapCoords.lng} name={branch.name} height="220px" />
-                                <div className="flex gap-6 p-3 bg-dark-850 text-xs font-bold text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
+                                <div className="flex gap-6 p-3 bg-gray-50 dark:bg-dark-850 text-xs font-bold text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
                                     <span>Lat: {mapCoords.lat.toFixed(6)}</span>
                                     <span>Lng: {mapCoords.lng.toFixed(6)}</span>
                                 </div>
@@ -317,7 +444,7 @@ export default function VendorBranchDetailPage() {
                                 <MapDisplay lat={branch.latitude} lng={branch.longitude} name={branch.name} height="240px" />
                             </div>
                         ) : (
-                            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-dark-850 p-8 text-center">
+                            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-gray-50 dark:bg-dark-850 p-8 text-center">
                                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No location set. Click "Edit" and paste a Google Maps link to show the map.</p>
                             </div>
                         )}
@@ -326,7 +453,7 @@ export default function VendorBranchDetailPage() {
             </div>
 
             {/* Amenities */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Amenities & Facilities</h2>
                     <button onClick={() => { setEditingAmenities(!editingAmenities); setAmenities(branch.amenities || []); }}
@@ -361,8 +488,8 @@ export default function VendorBranchDetailPage() {
                             <input type="text" value={amenityInput} onChange={(e) => setAmenityInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomAmenity(); } }}
                                 placeholder="Add custom amenity..."
-                                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
-                            <button type="button" onClick={addCustomAmenity} className="rounded-xl bg-dark-800 border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-bold text-gray-900 dark:text-white hover:bg-dark-700 transition-colors shadow-sm">Add</button>
+                                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
+                            <button type="button" onClick={addCustomAmenity} className="rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-bold text-gray-900 dark:text-white hover:bg-slate-200 dark:hover:bg-dark-700 transition-colors shadow-sm">Add</button>
                         </div>
                         <div className="flex justify-end pt-2">
                             <button onClick={handleSaveAmenities} disabled={savingAmenities} className="rounded-xl bg-brand-500 active:scale-95 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-all shadow-sm">
@@ -375,14 +502,14 @@ export default function VendorBranchDetailPage() {
                         {(branch.amenities?.length || 0) === 0 ? (
                             <p className="text-sm font-medium text-slate-500 py-4">No amenities set. Click "Edit" to add.</p>
                         ) : branch.amenities.map((a: string, i: number) => (
-                            <span key={i} className="inline-flex rounded-full bg-dark-850 border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">{a}</span>
+                            <span key={i} className="inline-flex rounded-full bg-gray-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">{a}</span>
                         ))}
                     </div>
                 )}
             </div>
 
             {/* Operating Hours */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Operating Hours</h2>
                     <button onClick={() => { setEditingHours(!editingHours); if (!editingHours) initHours(); }}
@@ -394,7 +521,7 @@ export default function VendorBranchDetailPage() {
                 {editingHours ? (
                     <div className="space-y-3">
                         {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => (
-                            <div key={day} className="flex items-center gap-3 rounded-xl bg-dark-850 px-4 py-3 border border-slate-200 dark:border-slate-700">
+                            <div key={day} className="flex items-center gap-3 rounded-xl bg-gray-50 dark:bg-dark-850 px-4 py-3 border border-slate-200 dark:border-slate-700">
                                 <span className="w-24 text-sm font-bold text-slate-600 dark:text-slate-300 capitalize">{day}</span>
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
@@ -411,14 +538,14 @@ export default function VendorBranchDetailPage() {
                                             type="time"
                                             value={hours[day]!.open}
                                             onChange={(e) => updateDayTime(day, "open", e.target.value)}
-                                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-900 px-3 py-1.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-3 py-1.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
                                         />
                                         <span className="text-slate-500">–</span>
                                         <input
                                             type="time"
                                             value={hours[day]!.close}
                                             onChange={(e) => updateDayTime(day, "close", e.target.value)}
-                                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-dark-900 px-3 py-1.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-3 py-1.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
                                         />
                                     </div>
                                 )}
@@ -435,7 +562,7 @@ export default function VendorBranchDetailPage() {
                         {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => {
                             const h = branch.operatingHours?.[day];
                             return (
-                                <div key={day} className="rounded-xl bg-dark-850 px-4 py-3 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <div key={day} className="rounded-xl bg-gray-50 dark:bg-dark-850 px-4 py-3 border border-slate-200 dark:border-slate-700 shadow-sm">
                                     <div className="text-xs font-bold text-slate-600 dark:text-slate-300 capitalize mb-1">{day}</div>
                                     <div className="text-sm font-medium text-brand-400">{h ? `${h.open} – ${h.close}` : "Closed"}</div>
                                 </div>
@@ -445,25 +572,25 @@ export default function VendorBranchDetailPage() {
                 )}
             </div>
 
-            {/* Services */}
-            <div className="rounded-2xl bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
+            {/* Units */}
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Services</h2>
+                    <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Units</h2>
                     <button onClick={() => setShowAddService(!showAddService)}
-                        className="rounded-xl bg-dark-800 border border-slate-200 dark:border-slate-700 text-gray-900 dark:text-white px-5 py-2.5 text-sm font-bold hover:bg-dark-700 transition-colors shadow-sm">
-                        {showAddService ? "Cancel" : "+ Add Service"}
+                        className="rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-slate-700 text-gray-900 dark:text-white px-5 py-2.5 text-sm font-bold hover:bg-slate-200 dark:hover:bg-dark-700 transition-colors shadow-sm">
+                        {showAddService ? "Cancel" : "+ Add Unit"}
                     </button>
                 </div>
 
                 {/* Add Service Form */}
                 {showAddService && (
-                    <form onSubmit={handleAddService} className="mb-8 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 bg-dark-850 space-y-5 shadow-inner">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white">New Service</h3>
+                    <form onSubmit={handleAddService} className="mb-8 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 bg-gray-50 dark:bg-dark-850 space-y-5 shadow-inner">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white">New Unit</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Type *</label>
                                 <select required value={newService.type} onChange={(e) => setNewService({ ...newService, type: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
                                     <option value="HOT_DESK">Hot Desk</option>
                                     <option value="PRIVATE_OFFICE">Private Office</option>
                                     <option value="MEETING_ROOM">Meeting Room</option>
@@ -472,34 +599,136 @@ export default function VendorBranchDetailPage() {
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Name *</label>
                                 <input type="text" required value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                                    placeholder="e.g. Quiet Zone Desk" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
+                                    placeholder="e.g. Quiet Zone Desk" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Capacity *</label>
-                                <input type="number" min="1" required value={newService.capacity} onChange={(e) => setNewService({ ...newService, capacity: parseInt(e.target.value) })}
-                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Unit Number</label>
+                                <input type="text" value={newService.unitNumber} onChange={(e) => setNewService({ ...newService, unitNumber: e.target.value })}
+                                    placeholder="e.g. R-101" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
                             </div>
                         </div>
                         <div className="grid grid-cols-3 gap-6 pt-5 border-t border-slate-200 dark:border-slate-800">
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Hourly (JOD)</label>
                                 <input type="number" step="0.01" value={newService.priceHourly} onChange={(e) => setNewService({ ...newService, priceHourly: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Daily (JOD)</label>
                                 <input type="number" step="0.01" value={newService.priceDaily} onChange={(e) => setNewService({ ...newService, priceDaily: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Monthly (JOD)</label>
                                 <input type="number" step="0.01" value={newService.priceMonthly} onChange={(e) => setNewService({ ...newService, priceMonthly: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-950 focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            </div>
+                        </div>
+                        {/* Room details row */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-5 border-t border-slate-200 dark:border-slate-800">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Floor</label>
+                                <input type="text" value={newService.floor} onChange={(e) => setNewService({ ...newService, floor: e.target.value })} placeholder="e.g. Ground Floor"
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Profile Name (EN)</label>
+                                <input type="text" value={newService.profileNameEn} onChange={(e) => setNewService({ ...newService, profileNameEn: e.target.value })}
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Profile Name (AR)</label>
+                                <input type="text" value={newService.profileNameAr} onChange={(e) => setNewService({ ...newService, profileNameAr: e.target.value })}
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Weight</label>
+                                <input type="number" value={newService.weight} onChange={(e) => setNewService({ ...newService, weight: e.target.value })}
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Net Size (sqm)</label>
+                                <input type="number" step="0.01" value={newService.netSize} onChange={(e) => setNewService({ ...newService, netSize: e.target.value })}
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Shape</label>
+                                <select value={newService.shape} onChange={(e) => setNewService({ ...newService, shape: e.target.value })}
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
+                                    <option value="">None</option>
+                                    <option value="L_SHAPE">L-Shape</option>
+                                    <option value="U_SHAPE">U-Shape</option>
+                                    <option value="RECTANGLE">Rectangle</option>
+                                    <option value="SQUARE">Square</option>
+                                    <option value="OVAL">Oval</option>
+                                    <option value="CUSTOM">Custom</option>
+                                </select>
+                            </div>
+                        </div>
+                        {/* Setup Configurations — only for MEETING_ROOM / EVENT_SPACE */}
+                        {(newService.type === "MEETING_ROOM" || newService.type === "EVENT_SPACE") && (
+                        <div className="pt-5 border-t border-slate-200 dark:border-slate-800">
+                            <div className="flex items-center justify-between mb-3">
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">Setup Configurations</label>
+                                <button type="button" onClick={() => setNewService({ ...newService, setupConfigs: [...newService.setupConfigs, { setupType: "CLASSROOM", minPeople: 1, maxPeople: 10 }] })}
+                                    className="rounded-lg bg-white dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-bold text-gray-900 dark:text-white hover:bg-slate-200 dark:hover:bg-dark-700 transition-colors">+ Add Setup Configuration</button>
+                            </div>
+                            {newService.setupConfigs.map((sc, idx) => (
+                                <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-3 mb-2 items-end">
+                                    <div>
+                                        {idx === 0 && <label className="block text-xs font-bold text-slate-500 mb-1">Setup Type</label>}
+                                        <select value={sc.setupType} onChange={(e) => { const updated = [...newService.setupConfigs]; updated[idx] = { ...sc, setupType: e.target.value }; setNewService({ ...newService, setupConfigs: updated }); }}
+                                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
+                                            <option value="CLASSROOM">Classroom</option><option value="THEATER">Theater</option><option value="BOARDROOM">Boardroom</option>
+                                            <option value="U_SHAPE_SEATING">U-Shape Seating</option><option value="HOLLOW_SQUARE">Hollow Square</option><option value="BANQUET">Banquet</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        {idx === 0 && <label className="block text-xs font-bold text-slate-500 mb-1">Min People</label>}
+                                        <input type="number" min="1" value={sc.minPeople} onChange={(e) => { const updated = [...newService.setupConfigs]; updated[idx] = { ...sc, minPeople: parseInt(e.target.value) || 1 }; setNewService({ ...newService, setupConfigs: updated }); }}
+                                            className="block w-24 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                    </div>
+                                    <div>
+                                        {idx === 0 && <label className="block text-xs font-bold text-slate-500 mb-1">Max People</label>}
+                                        <input type="number" min="1" value={sc.maxPeople} onChange={(e) => { const updated = [...newService.setupConfigs]; updated[idx] = { ...sc, maxPeople: parseInt(e.target.value) || 1 }; setNewService({ ...newService, setupConfigs: updated }); }}
+                                            className="block w-24 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                    </div>
+                                    <button type="button" onClick={() => setNewService({ ...newService, setupConfigs: newService.setupConfigs.filter((_, i) => i !== idx) })}
+                                        className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-3 text-xs font-bold text-red-500 hover:bg-red-500/20 transition-colors">Remove</button>
+                                </div>
+                            ))}
+                            {newService.setupConfigs.length === 0 && <p className="text-xs font-medium text-slate-500 py-2">No setup configurations added.</p>}
+                        </div>
+                        )}
+                        <div className="grid grid-cols-1 gap-6">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Description</label>
+                                <textarea value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} rows={2}
+                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors resize-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Features</label>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {newService.features.map((f) => (
+                                        <span key={f} className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 border border-brand-500/20 px-3 py-1 text-xs font-bold text-brand-400">
+                                            {f} <button type="button" onClick={() => setNewService({ ...newService, features: newService.features.filter(x => x !== f) })} className="text-brand-500/60 hover:text-brand-400">x</button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input type="text" value={newFeatureInput} onChange={(e) => setNewFeatureInput(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (newFeatureInput.trim() && !newService.features.includes(newFeatureInput.trim())) { setNewService({ ...newService, features: [...newService.features, newFeatureInput.trim()] }); setNewFeatureInput(""); } } }}
+                                        placeholder="Add feature..." className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500" />
+                                    <button type="button" onClick={() => { if (newFeatureInput.trim() && !newService.features.includes(newFeatureInput.trim())) { setNewService({ ...newService, features: [...newService.features, newFeatureInput.trim()] }); setNewFeatureInput(""); } }}
+                                        className="rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm font-bold text-gray-900 dark:text-white hover:bg-slate-200 dark:hover:bg-dark-700 transition-colors">Add</button>
+                                </div>
                             </div>
                         </div>
                         <div className="flex justify-end pt-2">
                             <button type="submit" disabled={submittingService} className="rounded-xl bg-brand-500 active:scale-95 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50 transition-all shadow-sm">
-                                {submittingService ? "Saving..." : "Save Service"}
+                                {submittingService ? "Saving..." : "Save Unit"}
                             </button>
                         </div>
                     </form>
@@ -508,43 +737,138 @@ export default function VendorBranchDetailPage() {
                 {/* Service list */}
                 <div className="space-y-4">
                     {branch.services?.length === 0 ? (
-                        <div className="text-center py-10 text-sm font-medium text-slate-500 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-dark-850">No services added yet.</div>
+                        <div className="text-center py-10 text-sm font-medium text-slate-500 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-gray-50 dark:bg-dark-850">No units added yet.</div>
                     ) : (
                         branch.services?.map((svc: any) => (
-                            <div key={svc.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-5 bg-dark-950 transition-all">
+                            <div key={svc.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-5 bg-gray-50 dark:bg-dark-950 transition-all">
                                 {editingServiceId === svc.id ? (
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Name</label>
                                                 <input type="text" value={editService.name} onChange={(e) => setEditService({ ...editService, name: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Capacity</label>
-                                                <input type="number" min="1" value={editService.capacity} onChange={(e) => setEditService({ ...editService, capacity: parseInt(e.target.value) })}
-                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Unit Number</label>
+                                                <input type="text" value={editService.unitNumber} onChange={(e) => setEditService({ ...editService, unitNumber: e.target.value })}
+                                                    placeholder="e.g. R-101" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-3 gap-4">
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Hourly (JOD)</label>
                                                 <input type="number" step="0.01" value={editService.priceHourly} onChange={(e) => setEditService({ ...editService, priceHourly: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Daily (JOD)</label>
                                                 <input type="number" step="0.01" value={editService.priceDaily} onChange={(e) => setEditService({ ...editService, priceDaily: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Monthly (JOD)</label>
                                                 <input type="number" step="0.01" value={editService.priceMonthly} onChange={(e) => setEditService({ ...editService, priceMonthly: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-dark-900 focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                            </div>
+                                        </div>
+                                        {/* Extended fields */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Floor</label>
+                                                <input type="text" value={editService.floor} onChange={(e) => setEditService({ ...editService, floor: e.target.value })}
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Shape</label>
+                                                <select value={editService.shape} onChange={(e) => setEditService({ ...editService, shape: e.target.value })}
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
+                                                    <option value="">None</option><option value="L_SHAPE">L-Shape</option><option value="U_SHAPE">U-Shape</option>
+                                                    <option value="RECTANGLE">Rectangle</option><option value="SQUARE">Square</option><option value="OVAL">Oval</option><option value="CUSTOM">Custom</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        {/* Setup Configurations — only for MEETING_ROOM / EVENT_SPACE */}
+                                        {(svc.type === "MEETING_ROOM" || svc.type === "EVENT_SPACE") && (
+                                        <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">Setup Configurations</label>
+                                                <button type="button" onClick={() => setEditService({ ...editService, setupConfigs: [...editService.setupConfigs, { setupType: "CLASSROOM", minPeople: 1, maxPeople: 10 }] })}
+                                                    className="rounded-lg bg-white dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-bold text-gray-900 dark:text-white hover:bg-slate-200 dark:hover:bg-dark-700 transition-colors">+ Add Setup Configuration</button>
+                                            </div>
+                                            {editService.setupConfigs.map((sc, idx) => (
+                                                <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-3 mb-2 items-end">
+                                                    <div>
+                                                        {idx === 0 && <label className="block text-xs font-bold text-slate-500 mb-1">Setup Type</label>}
+                                                        <select value={sc.setupType} onChange={(e) => { const updated = [...editService.setupConfigs]; updated[idx] = { ...sc, setupType: e.target.value }; setEditService({ ...editService, setupConfigs: updated }); }}
+                                                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
+                                                            <option value="CLASSROOM">Classroom</option><option value="THEATER">Theater</option><option value="BOARDROOM">Boardroom</option>
+                                                            <option value="U_SHAPE_SEATING">U-Shape Seating</option><option value="HOLLOW_SQUARE">Hollow Square</option><option value="BANQUET">Banquet</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        {idx === 0 && <label className="block text-xs font-bold text-slate-500 mb-1">Min People</label>}
+                                                        <input type="number" min="1" value={sc.minPeople} onChange={(e) => { const updated = [...editService.setupConfigs]; updated[idx] = { ...sc, minPeople: parseInt(e.target.value) || 1 }; setEditService({ ...editService, setupConfigs: updated }); }}
+                                                            className="block w-24 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    </div>
+                                                    <div>
+                                                        {idx === 0 && <label className="block text-xs font-bold text-slate-500 mb-1">Max People</label>}
+                                                        <input type="number" min="1" value={sc.maxPeople} onChange={(e) => { const updated = [...editService.setupConfigs]; updated[idx] = { ...sc, maxPeople: parseInt(e.target.value) || 1 }; setEditService({ ...editService, setupConfigs: updated }); }}
+                                                            className="block w-24 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                    </div>
+                                                    <button type="button" onClick={() => setEditService({ ...editService, setupConfigs: editService.setupConfigs.filter((_, i) => i !== idx) })}
+                                                        className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-3 text-xs font-bold text-red-500 hover:bg-red-500/20 transition-colors">Remove</button>
+                                                </div>
+                                            ))}
+                                            {editService.setupConfigs.length === 0 && <p className="text-xs font-medium text-slate-500 py-2">No setup configurations added.</p>}
+                                        </div>
+                                        )}
+                                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Weight</label>
+                                                <input type="number" value={editService.weight} onChange={(e) => setEditService({ ...editService, weight: e.target.value })}
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Net Size (sqm)</label>
+                                                <input type="number" step="0.01" value={editService.netSize} onChange={(e) => setEditService({ ...editService, netSize: e.target.value })}
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Profile Name (EN)</label>
+                                                <input type="text" value={editService.profileNameEn} onChange={(e) => setEditService({ ...editService, profileNameEn: e.target.value })}
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Profile Name (AR)</label>
+                                                <input type="text" value={editService.profileNameAr} onChange={(e) => setEditService({ ...editService, profileNameAr: e.target.value })}
+                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Description</label>
+                                            <textarea value={editService.description} onChange={(e) => setEditService({ ...editService, description: e.target.value })} rows={2}
+                                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors resize-none" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Features</label>
+                                            <div className="flex flex-wrap gap-2 mb-2">
+                                                {editService.features.map((f) => (
+                                                    <span key={f} className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 border border-brand-500/20 px-3 py-1 text-xs font-bold text-brand-400">
+                                                        {f} <button type="button" onClick={() => setEditService({ ...editService, features: editService.features.filter(x => x !== f) })} className="text-brand-500/60 hover:text-brand-400">x</button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <input type="text" value={editFeatureInput} onChange={(e) => setEditFeatureInput(e.target.value)}
+                                                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (editFeatureInput.trim() && !editService.features.includes(editFeatureInput.trim())) { setEditService({ ...editService, features: [...editService.features, editFeatureInput.trim()] }); setEditFeatureInput(""); } } }}
+                                                    placeholder="Add feature..." className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500" />
+                                                <button type="button" onClick={() => { if (editFeatureInput.trim() && !editService.features.includes(editFeatureInput.trim())) { setEditService({ ...editService, features: [...editService.features, editFeatureInput.trim()] }); setEditFeatureInput(""); } }}
+                                                    className="rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm font-bold text-gray-900 dark:text-white hover:bg-slate-200 dark:hover:bg-dark-700 transition-colors">Add</button>
                                             </div>
                                         </div>
                                         <div className="flex justify-end gap-3 pt-2">
-                                            <button onClick={() => setEditingServiceId(null)} className="rounded-xl px-5 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 bg-dark-800 border border-slate-200 dark:border-slate-700 hover:bg-dark-700 hover:text-gray-900 dark:hover:text-white transition-colors">Cancel</button>
+                                            <button onClick={() => setEditingServiceId(null)} className="rounded-xl px-5 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-dark-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-dark-700 hover:text-gray-900 dark:hover:text-white transition-colors">Cancel</button>
                                             <button onClick={handleSaveEdit} disabled={savingEdit} className="rounded-xl px-6 py-2 text-sm font-bold text-white bg-brand-500 active:scale-95 hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-sm">
                                                 {savingEdit ? "Saving..." : "Save"}
                                             </button>
@@ -555,11 +879,26 @@ export default function VendorBranchDetailPage() {
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center flex-wrap gap-2 mb-2">
                                                 <span className="text-lg font-bold text-gray-900 dark:text-white">{svc.name}</span>
+                                                {svc.unitNumber && <span className="rounded-md bg-slate-100 dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 tracking-wider">{svc.unitNumber}</span>}
                                                 <span className="rounded-md bg-brand-500/10 border border-brand-500/20 px-2 py-1 text-[10px] font-bold text-brand-400 tracking-wider">{formatServiceType(svc.type || "")}</span>
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-dark-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800/50 inline-flex">
-                                                <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg> {svc.capacity}</span>
-                                                <div className="w-px h-4 bg-slate-700 hidden sm:block"></div>
+                                            {/* Setup Configs display — only for eligible types */}
+                                            {(svc.type === "MEETING_ROOM" || svc.type === "EVENT_SPACE") && svc.setupConfigs && svc.setupConfigs.length > 0 ? (
+                                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                                    {svc.setupConfigs.map((sc: any, idx: number) => (
+                                                        <span key={idx} className="inline-flex rounded-full bg-slate-100 dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                                                            {sc.setupType.replace(/_/g, " ")}: {sc.minPeople}-{sc.maxPeople}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : svc.capacity != null ? (
+                                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400">
+                                                        <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg> {svc.capacity}
+                                                    </span>
+                                                </div>
+                                            ) : null}
+                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-gray-50 dark:bg-dark-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800/50 inline-flex">
                                                 {svc.pricing?.map((p: any) => (
                                                     <span key={p.interval} className="flex items-baseline gap-1">
                                                         <span className="text-xs text-slate-500 capitalize">{formatPricingInterval(p.interval)}:</span> <span className="text-gray-900 dark:text-white font-bold">JOD {Number(p.price).toFixed(2)}</span>
@@ -568,7 +907,7 @@ export default function VendorBranchDetailPage() {
                                             </div>
                                         </div>
                                         <div className="flex gap-2 shrink-0 sm:self-start">
-                                            <button onClick={() => startEdit(svc)} className="rounded-lg bg-dark-850 border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors">Edit</button>
+                                            <button onClick={() => startEdit(svc)} className="rounded-lg bg-gray-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-dark-800 transition-colors">Edit</button>
                                             <button onClick={() => handleDeleteServiceClick(svc.id)} className="rounded-lg bg-red-500/100/10 border border-red-500/20 px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-500/100/20 transition-colors">Delete</button>
                                         </div>
                                     </div>
@@ -583,8 +922,8 @@ export default function VendorBranchDetailPage() {
                 isOpen={confirmDeleteOpen}
                 onClose={() => { setConfirmDeleteOpen(false); setDeleteServiceTarget(null); }}
                 onConfirm={handleDeleteServiceConfirm}
-                title="Delete Service"
-                message="Are you sure you want to delete this service? This action cannot be undone."
+                title="Delete Unit"
+                message="Are you sure you want to delete this unit? This action cannot be undone."
                 confirmLabel="Delete"
                 variant="danger"
             />

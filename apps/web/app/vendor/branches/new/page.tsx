@@ -48,6 +48,7 @@ export default function NewBranchPage() {
 
     const [formData, setFormData] = useState({
         name: "", city: "AMMAN" as City, address: "", description: "", phone: "", email: "", googleMapsUrl: "",
+        grossArea: "", receptionMobile: "", receptionEmail: "",
     });
 
     const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -91,6 +92,9 @@ export default function NewBranchPage() {
             if (formData.phone) payload.phone = formData.phone;
             if (formData.email) payload.email = formData.email;
             if (formData.googleMapsUrl) payload.googleMapsUrl = formData.googleMapsUrl;
+            if (formData.grossArea) payload.grossArea = Number(formData.grossArea);
+            if (formData.receptionMobile) payload.receptionMobile = formData.receptionMobile;
+            if (formData.receptionEmail) payload.receptionEmail = formData.receptionEmail;
             if (coords) { payload.latitude = coords.lat; payload.longitude = coords.lng; }
 
             const hours: Record<string, any> = {};
@@ -120,7 +124,7 @@ export default function NewBranchPage() {
                 </div>
             </div>
 
-            <div className="rounded-xl bg-dark-900 p-6 shadow-sm ring-1 ring-slate-800">
+            <div className="rounded-xl bg-white dark:bg-dark-900 p-6 shadow-sm ring-1 ring-slate-800">
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {error && <div className="rounded-xl bg-red-500/10 p-3 text-sm text-red-400 border border-red-500/20">{error}</div>}
 
@@ -129,34 +133,56 @@ export default function NewBranchPage() {
                         <div className="sm:col-span-2">
                             <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Branch Name *</label>
                             <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">City *</label>
                             <select value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value as City })}
-                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500">
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500">
                                 {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Address *</label>
                             <input type="text" required value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                         <div className="sm:col-span-2">
                             <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Description</label>
                             <textarea rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Phone</label>
                             <input type="text" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Email</label>
                             <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                                className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                        </div>
+                    </div>
+
+                    {/* Property Details */}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Property Details</label>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <div>
+                                <label className="block text-xs font-medium text-slate-500 mb-1">Gross Area (sqm)</label>
+                                <input type="number" step="0.01" value={formData.grossArea} onChange={(e) => setFormData({ ...formData, grossArea: e.target.value })}
+                                    placeholder="e.g. 150" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-500 mb-1">Reception Mobile</label>
+                                <input type="text" value={formData.receptionMobile} onChange={(e) => setFormData({ ...formData, receptionMobile: e.target.value })}
+                                    placeholder="+962 7XX XXX XXXX" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-500 mb-1">Reception Email</label>
+                                <input type="email" value={formData.receptionEmail} onChange={(e) => setFormData({ ...formData, receptionEmail: e.target.value })}
+                                    placeholder="reception@branch.com" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                            </div>
                         </div>
                     </div>
 
@@ -167,7 +193,7 @@ export default function NewBranchPage() {
                         </label>
                         <input type="url" placeholder="https://maps.google.com/..." value={formData.googleMapsUrl}
                             onChange={(e) => handleGoogleMapsChange(e.target.value)}
-                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
+                            className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500 focus:ring-brand-500" />
                         {coords && (
                             <div className="mt-3">
                                 <MapDisplay lat={coords.lat} lng={coords.lng} name={formData.name || "Branch Location"} height="250px" />
@@ -187,7 +213,7 @@ export default function NewBranchPage() {
                                 const active = amenities.includes(a);
                                 return (
                                     <button key={a} type="button" onClick={() => toggleAmenity(a)}
-                                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-brand-500 text-white" : "bg-dark-800 text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-dark-800"}`}>
+                                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active ? "bg-brand-500 text-white" : "bg-white dark:bg-dark-800 text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-dark-800"}`}>
                                         {active && "✓ "}{a}
                                     </button>
                                 );
@@ -206,8 +232,8 @@ export default function NewBranchPage() {
                             <input type="text" value={amenityInput} onChange={(e) => setAmenityInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomAmenity(); } }}
                                 placeholder="Add custom amenity..."
-                                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm bg-dark-850 focus:bg-dark-900 focus:border-brand-500" />
-                            <button type="button" onClick={addCustomAmenity} className="rounded-xl bg-dark-800 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-dark-800">Add</button>
+                                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm bg-white dark:bg-dark-850 focus:bg-dark-900 focus:border-brand-500" />
+                            <button type="button" onClick={addCustomAmenity} className="rounded-xl bg-white dark:bg-dark-800 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-dark-800">Add</button>
                         </div>
                     </div>
 
@@ -216,7 +242,7 @@ export default function NewBranchPage() {
                         <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">Operating Hours</label>
                         <div className="space-y-2">
                             {DAYS.map((day) => (
-                                <div key={day} className="flex items-center gap-3 rounded-lg bg-dark-850 px-4 py-2">
+                                <div key={day} className="flex items-center gap-3 rounded-lg bg-white dark:bg-dark-850 px-4 py-2">
                                     <span className="w-24 text-sm font-medium text-slate-600 dark:text-slate-300 capitalize">{day}</span>
                                     <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 cursor-pointer">
                                         <input type="checkbox" checked={!(operatingHours[day] || { closed: false }).closed}
@@ -252,7 +278,7 @@ export default function NewBranchPage() {
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <button type="button" onClick={() => router.back()} className="rounded-xl px-5 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-dark-800 hover:bg-gray-100 dark:hover:bg-dark-800">Cancel</button>
+                        <button type="button" onClick={() => router.back()} className="rounded-xl px-5 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-dark-800 hover:bg-gray-100 dark:hover:bg-dark-800">Cancel</button>
                         <button type="submit" disabled={loading}
                             className="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50">
                             {loading ? "Submitting..." : "Submit for Review"}

@@ -75,6 +75,7 @@ const baseBookingRecord = {
   totalPrice: decimal(25),
   currency: 'JOD',
   notes: null,
+  requestedSetup: null,
   createdAt: new Date('2026-03-01T00:00:00.000Z'),
   branch: { id: BRANCH_ID, name: 'Downtown Hub', city: 'AMMAN', address: '123 Main St' },
   service: { id: SERVICE_ID, type: 'HOT_DESK', name: 'Hot Desk' },
@@ -102,6 +103,7 @@ describe('BookingsService', () => {
     payment: { findUnique: jest.Mock; update: jest.Mock };
     branch: { findUnique: jest.Mock };
     notification: { create: jest.Mock; createMany: jest.Mock };
+    paymentLog: { create: jest.Mock };
   };
   let redis: { acquireLock: jest.Mock; releaseLock: jest.Mock };
 
@@ -120,6 +122,7 @@ describe('BookingsService', () => {
       payment: { findUnique: jest.fn(), update: jest.fn() },
       branch: { findUnique: jest.fn().mockResolvedValue({ name: 'Downtown Hub', vendor: { userId: 'vendor-user-1' } }) },
       notification: { create: jest.fn().mockResolvedValue({}), createMany: jest.fn().mockResolvedValue({ count: 2 }) },
+      paymentLog: { create: jest.fn().mockResolvedValue({}) },
     };
 
     redis = {
@@ -158,6 +161,7 @@ describe('BookingsService', () => {
         totalPrice: 25,
         currency: 'JOD',
         notes: null,
+        requestedSetup: null,
         createdAt: expect.any(String),
         branch: baseBookingRecord.branch,
         service: baseBookingRecord.service,
@@ -592,6 +596,7 @@ describe('BookingsService', () => {
             totalPrice: 25,
             currency: 'JOD',
             notes: null,
+            requestedSetup: null,
             createdAt: expect.any(String),
             branch: baseBookingRecord.branch,
             service: baseBookingRecord.service,

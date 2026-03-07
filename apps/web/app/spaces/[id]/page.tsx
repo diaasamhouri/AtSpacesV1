@@ -170,7 +170,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
                     const hours = operatingHours[day];
                     const isToday = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() === day;
                     return (
-                      <div key={day} className={`rounded-2xl p-4 transition-colors ${isToday ? 'bg-brand-500/10 border border-brand-500/30' : 'bg-dark-900 border border-slate-200 dark:border-slate-800'}`}>
+                      <div key={day} className={`rounded-2xl p-4 transition-colors ${isToday ? 'bg-brand-500/10 border border-brand-500/30' : 'bg-slate-50 dark:bg-dark-900 border border-slate-200 dark:border-slate-800'}`}>
                         <div className={`text-xs font-bold uppercase tracking-wider ${isToday ? 'text-brand-500' : 'text-slate-500'}`}>
                           {DAY_SHORT[day]}
                         </div>
@@ -193,7 +193,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
                 )}
                 {branch.googleMapsUrl && (
                   <a href={branch.googleMapsUrl} target="_blank" rel="noopener noreferrer"
-                    className="mt-4 inline-flex items-center gap-2 rounded-xl bg-dark-900 px-5 py-3 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-dark-850 hover:text-gray-900 dark:hover:text-white transition-colors border border-slate-200 dark:border-slate-800">
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-50 dark:bg-dark-900 px-5 py-3 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-dark-850 hover:text-gray-900 dark:hover:text-white transition-colors border border-slate-200 dark:border-slate-800">
                     <svg className="h-5 w-5 text-brand-500" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     </svg>
@@ -209,7 +209,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
               <div className="space-y-6">
                 {branch.services.map((service: any) => (
                   <div key={service.id}
-                    className="rounded-[2.5rem] border border-slate-200 dark:border-slate-800 bg-dark-900 p-8 shadow-float hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:border-brand-500/50 transition-all duration-500 group">
+                    className="rounded-[2.5rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-8 shadow-float hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:border-brand-500/50 transition-all duration-500 group">
                     <div className="flex items-start justify-between">
                       <div>
                         <span className="inline-flex rounded-full bg-brand-500/10 px-4 py-1.5 text-xs font-bold tracking-wide text-brand-500 mb-4 transition-colors group-hover:bg-brand-500/20">
@@ -221,11 +221,11 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
                         {service.description && (
                           <p className="mt-3 text-base text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">{service.description}</p>
                         )}
-                        <p className="mt-5 flex items-center text-sm font-bold text-slate-600 dark:text-slate-300 bg-dark-850 max-w-max px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <p className="mt-5 flex items-center text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-dark-850 max-w-max px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                           <svg className="mr-2 h-4 w-4 text-brand-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
                           </svg>
-                          Fits up to {service.capacity} {service.capacity === 1 ? 'person' : 'people'}
+                          Fits up to {service.capacity ?? 0} {(service.capacity ?? 0) === 1 ? 'person' : 'people'}
                         </p>
                       </div>
                     </div>
@@ -234,7 +234,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
                     <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {service.pricing.map((p: any) => (
                         <div key={p.id}
-                          className="flex flex-col rounded-[1.5rem] bg-dark-850 p-5 border border-slate-200 dark:border-slate-700 shadow-sm transition-transform duration-300 group-hover:-translate-y-1">
+                          className="flex flex-col rounded-[1.5rem] bg-slate-50 dark:bg-dark-850 p-5 border border-slate-200 dark:border-slate-700 shadow-sm transition-transform duration-300 group-hover:-translate-y-1">
                           <span className="text-sm font-bold text-slate-500 mb-1 tracking-wide uppercase">
                             {formatPricingInterval(p.interval)}
                           </span>
@@ -260,7 +260,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
             <MotionWrapper type="fade-up" delay={0.5} className="sticky top-32 space-y-8">
 
               {/* Booking Card */}
-              <div className="bg-dark-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-float relative overflow-hidden group">
+              <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-float relative overflow-hidden group">
                 <div className="absolute -inset-x-2 -top-2 h-32 bg-gradient-to-b from-brand-500/10 to-transparent blur-xl pointer-events-none" />
                 <div className="relative z-10">
                   <h3 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-3 tracking-tight">Book Space</h3>
@@ -276,7 +276,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
               </div>
 
               {/* Contact Details */}
-              <div className="rounded-[2.5rem] border border-slate-200 dark:border-slate-800 bg-dark-900 p-8 shadow-float group hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] transition-all duration-500">
+              <div className="rounded-[2.5rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-8 shadow-float group hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] transition-all duration-500">
                 <h3 className="text-xl font-extrabold text-gray-900 dark:text-white mb-6 tracking-tight">Host Contact</h3>
                 <div className="space-y-5">
                   {branch.phone && (
@@ -308,7 +308,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
 
               {/* Social Links */}
               {hasSocials && (
-                <div className="rounded-[2.5rem] border border-slate-200 dark:border-slate-800 bg-dark-900 p-8 shadow-float">
+                <div className="rounded-[2.5rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-8 shadow-float">
                   <h3 className="text-xl font-extrabold text-gray-900 dark:text-white mb-5 tracking-tight">Follow Us</h3>
                   <div className="flex flex-wrap gap-3">
                     {Object.entries(socialLinks).map(([key, url]) => {
@@ -317,7 +317,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
                       if (!info) return null;
                       return (
                         <a key={key} href={url} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 rounded-xl bg-dark-850 px-4 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-brand-500/10 hover:text-brand-500 transition-colors border border-slate-200 dark:border-slate-700 hover:border-brand-500/50">
+                          className="inline-flex items-center gap-2 rounded-xl bg-slate-50 dark:bg-dark-850 px-4 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-brand-500/10 hover:text-brand-500 transition-colors border border-slate-200 dark:border-slate-700 hover:border-brand-500/50">
                           {info.svg}
                           {info.label}
                         </a>

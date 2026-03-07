@@ -17,6 +17,32 @@ export class AdminPaymentsQueryDto extends PaginationQueryDto {
     status?: string;
 }
 
-export class AdminBranchesQueryDto extends PaginationQueryDto { }
+export class AdminBranchesQueryDto extends PaginationQueryDto {
+    @IsOptional()
+    @IsString()
+    status?: string;
 
-export class AdminApprovalsQueryDto extends PaginationQueryDto { }
+    @IsOptional()
+    @IsString()
+    city?: string;
+}
+
+export class AdminApprovalsQueryDto extends PaginationQueryDto {
+    @IsOptional()
+    @IsString()
+    status?: string;
+}
+
+export class AdminServicesQueryDto extends PaginationQueryDto {
+    @IsOptional()
+    @IsString()
+    branchId?: string;
+
+    @IsOptional()
+    @IsString()
+    type?: string;
+
+    @IsOptional()
+    @IsString()
+    floor?: string;
+}

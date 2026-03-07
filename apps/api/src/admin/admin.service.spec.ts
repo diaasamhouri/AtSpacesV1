@@ -165,6 +165,79 @@ describe('AdminService', () => {
     });
   });
 
+  // ==================== getVendorById ====================
+
+  describe('getVendorById', () => {
+    it('should return vendor with expanded fields including relations', async () => {
+      const mockVendor = {
+        id: 'v1',
+        companyName: 'Test Vendor',
+        description: 'A vendor',
+        phone: '123',
+        website: 'https://vendor.com',
+        images: [],
+        logo: 'logo.png',
+        socialLinks: { twitter: 'https://twitter.com/test' },
+        companyLegalName: 'Test Legal LLC',
+        companyShortName: 'TL',
+        companyTradeName: 'Test Trade',
+        companyNationalId: 'NID123',
+        companyRegistrationNumber: 'REG456',
+        companyRegistrationDate: new Date('2025-01-01'),
+        companySalesTaxNumber: 'TAX789',
+        registeredInCountry: 'Jordan',
+        hasTaxExemption: false,
+        companyDescription: 'Full description',
+        status: 'APPROVED',
+        isVerified: true,
+        verificationRequestedAt: null,
+        verifiedAt: new Date('2026-02-01'),
+        verificationNote: 'Verified by admin',
+        commissionRate: 10,
+        rejectionReason: null,
+        createdAt: new Date('2026-01-01'),
+        user: { name: 'Owner', email: 'owner@test.com', phone: '123' },
+        branches: [
+          {
+            id: 'b1', name: 'Branch 1', city: 'AMMAN', address: 'Addr', status: 'ACTIVE',
+            _count: { services: 3, bookings: 5 },
+          },
+        ],
+        authorizedSignatories: [{ id: 's1', fullName: 'Signer' }],
+        companyContacts: [{ id: 'cc1', contactPersonName: 'Contact' }],
+        departmentContacts: [{ id: 'dc1', department: 'FINANCE' }],
+        bankingInfo: [{ id: 'bi1', bankName: 'Arab Bank' }],
+      };
+
+      prisma.vendorProfile.findUnique.mockResolvedValue(mockVendor);
+
+      const result = await service.getVendorById('v1');
+
+      expect(result.companyLegalName).toBe('Test Legal LLC');
+      expect(result.authorizedSignatories).toHaveLength(1);
+      expect(result.companyContacts).toHaveLength(1);
+      expect(result.departmentContacts).toHaveLength(1);
+      expect(result.bankingInfo).toHaveLength(1);
+      expect(result.verifiedAt).toBeDefined();
+      expect(result.logo).toBe('logo.png');
+      expect(prisma.vendorProfile.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            authorizedSignatories: true,
+            companyContacts: true,
+            departmentContacts: true,
+            bankingInfo: true,
+          }),
+        }),
+      );
+    });
+
+    it('should throw NotFoundException for non-existent vendor', async () => {
+      prisma.vendorProfile.findUnique.mockResolvedValue(null);
+      await expect(service.getVendorById('nonexistent')).rejects.toThrow(NotFoundException);
+    });
+  });
+
   // ==================== updateVendorStatus ====================
 
   describe('updateVendorStatus', () => {
@@ -248,6 +321,7 @@ describe('AdminService', () => {
           isVerified: true,
           verifiedAt: expect.any(Date),
           verificationNote: 'Verified by admin',
+          verificationRequestedAt: null,
         },
         include: { user: { select: { id: true, name: true, email: true } } },
       });
@@ -274,6 +348,7 @@ describe('AdminService', () => {
           isVerified: false,
           verifiedAt: null,
           verificationNote: null,
+          verificationRequestedAt: null,
         },
         include: { user: { select: { id: true, name: true, email: true } } },
       });
@@ -303,6 +378,7 @@ describe('AdminService', () => {
           type: 'GENERAL',
           title: expect.stringContaining('Verified'),
           message: expect.stringContaining('verified'),
+          data: { vendorProfileId: 'v1' },
         },
       });
     });
@@ -325,6 +401,7 @@ describe('AdminService', () => {
           type: 'GENERAL',
           title: 'Verification Removed',
           message: expect.stringContaining('removed'),
+          data: { vendorProfileId: 'v1' },
         },
       });
     });
@@ -384,6 +461,7 @@ describe('AdminService', () => {
           type: 'VENDOR_APPROVED',
           title: 'Vendor Application Approved',
           message: expect.stringContaining('approved'),
+          data: { vendorProfileId: 'vp1' },
         },
       });
     });
@@ -439,6 +517,7 @@ describe('AdminService', () => {
           type: 'VENDOR_REJECTED',
           title: 'Vendor Application Rejected',
           message: expect.stringContaining('rejected'),
+          data: { vendorProfileId: 'vp2' },
         },
       });
     });

@@ -44,7 +44,7 @@ body {
 
 /* Glassmorphism utility classes */
 .glass-panel {
-  background: rgb(var(--surface-900) / 0.7);
+  background: rgb(var(--surface-900) / 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgb(var(--surface-700) / 0.3);
@@ -208,4 +208,16 @@ textarea::placeholder {
 }
 .toast-container > * {
   pointer-events: auto;
+}
+
+/* Print styles — hide navigation and sidebar */
+@media print {
+  nav, aside, [data-sidebar], [data-navbar] {
+    display: none !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
 }

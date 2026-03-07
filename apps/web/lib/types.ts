@@ -1,11 +1,14 @@
 export type City = 'AMMAN' | 'IRBID' | 'AQABA';
 export type ServiceType = 'HOT_DESK' | 'PRIVATE_OFFICE' | 'MEETING_ROOM' | 'EVENT_SPACE';
+export type RoomShape = 'L_SHAPE' | 'U_SHAPE' | 'RECTANGLE' | 'SQUARE' | 'OVAL' | 'CUSTOM';
+export type SetupType = 'CLASSROOM' | 'THEATER' | 'BOARDROOM' | 'U_SHAPE_SEATING' | 'HOLLOW_SQUARE' | 'BANQUET';
 export type PricingInterval =
   | 'HOURLY'
   | 'HALF_DAY'
   | 'DAILY'
   | 'WEEKLY'
   | 'MONTHLY';
+export type PricingMode = 'PER_BOOKING' | 'PER_PERSON' | 'PER_HOUR';
 
 export interface VendorSummary {
   id: string;
@@ -16,17 +19,33 @@ export interface VendorSummary {
 export interface PricingItem {
   id: string;
   interval: PricingInterval;
+  pricingMode?: PricingMode;
   price: number;
   currency: string;
+}
+
+export interface SetupConfig {
+  setupType: SetupType;
+  minPeople: number;
+  maxPeople: number;
 }
 
 export interface ServiceItem {
   id: string;
   type: ServiceType;
   name: string;
+  unitNumber: string | null;
   description: string | null;
-  capacity: number;
+  capacity: number | null;
+  floor: string | null;
+  profileNameEn: string | null;
+  profileNameAr: string | null;
+  weight: number | null;
+  netSize: number | null;
+  shape: RoomShape | null;
+  features: string[];
   pricing: PricingItem[];
+  setupConfigs: SetupConfig[];
 }
 
 export interface BranchListItem {
@@ -79,7 +98,8 @@ export type BookingStatus =
   | 'COMPLETED'
   | 'NO_SHOW'
   | 'CANCELLED'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'EXPIRED';
 
 export type PaymentMethod = 'VISA' | 'MASTERCARD' | 'APPLE_PAY' | 'CASH';
 export type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
@@ -115,10 +135,34 @@ export interface Booking {
   totalPrice: number;
   currency: string;
   notes: string | null;
+  requestedSetup?: string | null;
+  pricingInterval?: PricingInterval | null;
+  unitPrice?: number | null;
+  subtotal?: number | null;
+  discountType?: DiscountType;
+  discountValue?: number | null;
+  discountAmount?: number | null;
+  taxRate?: number | null;
+  taxAmount?: number | null;
+  bookingGroupId?: string | null;
+  addOns?: BookingAddOnItem[];
   createdAt: string;
   branch: BookingBranch;
   service: BookingService;
   payment: BookingPayment | null;
+}
+
+export const SETUP_TYPES = [
+  { value: 'CLASSROOM', label: 'Classroom' },
+  { value: 'THEATER', label: 'Theater' },
+  { value: 'BOARDROOM', label: 'Boardroom' },
+  { value: 'U_SHAPE_SEATING', label: 'U-Shape Seating' },
+  { value: 'HOLLOW_SQUARE', label: 'Hollow Square' },
+  { value: 'BANQUET', label: 'Banquet' },
+] as const;
+
+export function formatSetupType(setup: string): string {
+  return setup.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 export interface BookingListResponse {
@@ -166,6 +210,17 @@ export interface VendorBooking extends Booking {
   };
 }
 
+// ==================== CUSTOMER SEARCH ====================
+
+export interface CustomerSearchResult {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  entityType?: EntityType | null;
+  customerClassification?: CustomerClassification | null;
+}
+
 // ==================== GENERIC ====================
 
 export interface PaginatedResponse<T> {
@@ -206,6 +261,11 @@ export interface AdminUser {
   role: UserRole;
   isActive: boolean;
   createdAt: string;
+  entityType: EntityType | null;
+  gender: Gender | null;
+  nationality: string | null;
+  customerClassification: CustomerClassification | null;
+  preferredLanguage: string | null;
 }
 
 export interface AdminBooking {
@@ -215,6 +275,7 @@ export interface AdminBooking {
   endTime: string;
   totalPrice: number;
   currency: string;
+  requestedSetup?: string | null;
   customer: { name: string | null; email: string | null; } | null;
   branch: { name: string; vendor: string; } | null;
   service: { name: string; type: ServiceType; } | null;
@@ -267,6 +328,7 @@ export interface AdminNotification {
   message: string;
   type: string;
   isRead: boolean;
+  data: Record<string, unknown> | null;
   createdAt: string;
   user: { name: string | null; email: string | null; } | null;
 }
@@ -324,6 +386,23 @@ export interface VendorProfile {
   socialLinks: Record<string, string> | null;
   status: VendorStatus;
   isVerified: boolean;
+  verificationRequestedAt: string | null;
+  companyLegalName: string | null;
+  companyShortName: string | null;
+  companyTradeName: string | null;
+  companyNationalId: string | null;
+  companyRegistrationNumber: string | null;
+  companyRegistrationDate: string | null;
+  companySalesTaxNumber: string | null;
+  registeredInCountry: string | null;
+  hasTaxExemption: boolean;
+  taxRate: number;
+  taxEnabled: boolean;
+  companyDescription: string | null;
+  authorizedSignatories: AuthorizedSignatory[];
+  companyContacts: CompanyContact[];
+  departmentContacts: DepartmentContact[];
+  bankingInfo: BankingInfo[];
 }
 
 export interface VendorEarnings {
@@ -345,6 +424,7 @@ export interface VendorNotification {
   message: string;
   type: string;
   isRead: boolean;
+  data: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -358,6 +438,40 @@ export interface PromoCode {
   validUntil: string | null;
   branch: { id: string; name: string } | null;
   createdAt: string;
+}
+
+// ==================== VENDOR ADD-ONS ====================
+
+export type DiscountType = 'NONE' | 'PERCENTAGE' | 'FIXED' | 'PROMO_CODE';
+
+export interface VendorAddOn {
+  id: string;
+  name: string;
+  nameAr?: string | null;
+  unitPrice: number;
+  currency: string;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export interface BookingAddOnItem {
+  id: string;
+  vendorAddOnId: string | null;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  totalPrice: number;
+  serviceTime: string | null;
+  comments: string | null;
+}
+
+export interface QuotationLineItem {
+  id: string;
+  description: string;
+  unitPrice: number;
+  quantity: number;
+  totalPrice: number;
+  sortOrder: number;
 }
 
 export interface Review {
@@ -416,8 +530,23 @@ export interface AdminVendorDetail {
   phone: string | null;
   website: string | null;
   images: string[];
+  logo: string | null;
+  socialLinks: Record<string, string> | null;
+  companyLegalName: string | null;
+  companyShortName: string | null;
+  companyTradeName: string | null;
+  companyNationalId: string | null;
+  companyRegistrationNumber: string | null;
+  companyRegistrationDate: string | null;
+  companySalesTaxNumber: string | null;
+  registeredInCountry: string | null;
+  hasTaxExemption: boolean;
+  companyDescription: string | null;
   status: VendorStatus;
   isVerified: boolean;
+  verificationRequestedAt: string | null;
+  verifiedAt: string | null;
+  verificationNote: string | null;
   commissionRate: number | null;
   rejectionReason: string | null;
   createdAt: string;
@@ -431,6 +560,19 @@ export interface AdminVendorDetail {
     servicesCount: number;
     bookingsCount: number;
   }[];
+  authorizedSignatories: AuthorizedSignatory[];
+  companyContacts: CompanyContact[];
+  departmentContacts: DepartmentContact[];
+  bankingInfo: BankingInfo[];
+}
+
+export interface PendingVerification {
+  id: string;
+  companyName: string;
+  logo: string | null;
+  status: VendorStatus;
+  verificationRequestedAt: string | null;
+  owner: { name: string | null; email: string } | null;
 }
 
 export interface AdminBookingDetail {
@@ -442,6 +584,7 @@ export interface AdminBookingDetail {
   totalPrice: number;
   currency: string;
   notes: string | null;
+  requestedSetup?: string | null;
   createdAt: string;
   customer: { id: string; name: string | null; email: string | null; phone: string | null } | null;
   branch: { id: string; name: string; city: City; address: string; vendor: string } | null;
@@ -477,9 +620,234 @@ export interface AdminBranchDetail {
   services: {
     id: string;
     name: string;
+    unitNumber?: string | null;
     type: ServiceType;
-    capacity: number;
+    capacity: number | null;
     pricing: { interval: string; price: number; currency: string }[];
+    setupConfigs?: SetupConfig[];
   }[];
+}
+
+// ==================== QUOTATIONS ====================
+
+export type QuotationStatus = 'NOT_SENT' | 'SENT' | 'ACCEPTED' | 'REJECTED';
+
+export interface Quotation {
+  id: string;
+  referenceNumber: string;
+  customerId: string;
+  customer: { name: string | null; email: string | null };
+  branchId: string;
+  branch: { name: string };
+  serviceId: string;
+  service: { name: string; type: ServiceType };
+  startTime: string;
+  endTime: string;
+  numberOfPeople: number;
+  totalAmount: number;
+  status: QuotationStatus;
+  notes: string | null;
+  sentAt: string | null;
+  createdById: string;
+  createdBy: { name: string | null };
+  bookingId: string | null;
+  subtotal?: number | null;
+  discountType?: DiscountType;
+  discountValue?: number | null;
+  discountAmount?: number | null;
+  taxRate?: number | null;
+  taxAmount?: number | null;
+  lineItems?: QuotationLineItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== INVOICES ====================
+
+export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  bookingId: string;
+  booking: {
+    id: string;
+    startTime: string;
+    endTime: string;
+    branch: { name: string };
+    service: { name: string };
+  };
+  customerId: string;
+  customer: { name: string | null; email: string | null };
+  amount: number;
+  taxAmount: number;
+  totalAmount: number;
+  status: InvoiceStatus;
+  issuedAt: string | null;
+  dueDate: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==================== FINANCIAL DASHBOARD ====================
+
+export interface FinancialReport {
+  todayPayments: number;
+  weekForecast: number;
+  monthForecast: number;
+  yearForecast: number;
+  duePayments: number;
+  stumblingAccounts: number;
+  invoicesTotal: number;
+  receiptsTotal: number;
+}
+
+export interface PropertiesOverview {
+  allProperties: number;
+  offices: number;
+  meetingRooms: number;
+  availableUnits: number;
+}
+
+export interface BookingOverview {
+  activeBookings: number;
+  expiringSoon: number;
+  expired: number;
+  pendingApproval: number;
+}
+
+// ==================== ENTITY MANAGEMENT ====================
+
+export type EntityType = 'COMPANY' | 'INDIVIDUAL';
+export type Gender = 'MALE' | 'FEMALE';
+export type LegalDocType = 'NATIONAL_ID' | 'PASSPORT';
+export type CustomerClassification = 'LEVEL_0' | 'LEVEL_1' | 'LEVEL_2' | 'LEVEL_3' | 'LEVEL_4' | 'LEVEL_5' | 'LEVEL_6';
+export type EntityRoleName = 'OPERATOR' | 'LESSOR' | 'OWNER' | 'EMPLOYEE' | 'MAINTENANCE' | 'RECEPTION' | 'TENANT' | 'LEGAL' | 'BOOKING' | 'CUSTOMER_CARE';
+export type DepartmentType = 'FINANCE' | 'LEGAL' | 'OPERATIONS' | 'MARKETING' | 'HR' | 'IT' | 'SALES' | 'CUSTOMER_SERVICE';
+
+export interface Entity {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  entityType: EntityType | null;
+  nationality: string | null;
+  gender: Gender | null;
+  customerClassification: CustomerClassification | null;
+  role: UserRole;
+  isActive: boolean;
+  createdAt: string;
+  entityRoles: { name: EntityRoleName }[];
+  vendorProfile?: {
+    companyName: string;
+    companyLegalName: string | null;
+  } | null;
+}
+
+export interface AuthorizedSignatory {
+  id: string;
+  fullName: string;
+  nationality: string | null;
+  legalDocType: LegalDocType | null;
+  legalDocNumber: string | null;
+  mobile: string | null;
+  email: string | null;
+  gender: Gender | null;
+  idFileUrl: string | null;
+}
+
+export interface CompanyContact {
+  id: string;
+  contactPersonName: string | null;
+  mobile: string | null;
+  email: string | null;
+  website: string | null;
+  phone: string | null;
+  fax: string | null;
+  logoUrl: string | null;
+  profileFileUrl: string | null;
+}
+
+export interface DepartmentContact {
+  id: string;
+  department: DepartmentType;
+  contactName: string | null;
+  mobile: string | null;
+  phone: string | null;
+  email: string | null;
+  fax: string | null;
+}
+
+export interface BankingInfo {
+  id: string;
+  bankName: string | null;
+  bankBranch: string | null;
+  accountNumber: string | null;
+  iban: string | null;
+  swiftCode: string | null;
+  accountantManagerName: string | null;
+  cliq: string | null;
+  signatureUrl: string | null;
+}
+
+// ==================== ADMIN SERVICES (UNITS) ====================
+
+export interface AdminService {
+  id: string;
+  name: string;
+  unitNumber: string | null;
+  type: ServiceType;
+  capacity: number | null;
+  isActive: boolean;
+  description: string | null;
+  profileNameEn: string | null;
+  profileNameAr: string | null;
+  weight: number | null;
+  netSize: number | null;
+  floor: string | null;
+  shape: RoomShape | null;
+  features: string[];
+  createdAt: string;
+  branch: { id: string; name: string; vendor?: string };
+  pricing: { id: string; interval: PricingInterval; price: number; currency: string }[];
+  setupConfigs: SetupConfig[];
+}
+
+export interface AdminServiceDetail extends AdminService {
+  branch: { id: string; name: string; vendor: string };
+}
+
+// ==================== PAYMENT LOGS ====================
+
+export interface PaymentLogEntry {
+  id: string;
+  paymentId: string;
+  action: string;
+  performedBy: { name: string | null; role: string };
+  receiptNumber: string | null;
+  notes: string | null;
+  details: string | null;
+  createdAt: string;
+}
+
+// ==================== DAY VIEW ====================
+
+export interface DayViewRoom {
+  id: string;
+  name: string;
+  branch: string;
+  bookings: {
+    id: string;
+    ref: string;
+    startTime: string;
+    endTime: string;
+    customer: string | null;
+    status: BookingStatus;
+  }[];
+}
+
+export interface DayViewResponse {
+  rooms: DayViewRoom[];
 }
 

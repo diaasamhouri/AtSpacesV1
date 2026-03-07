@@ -8,7 +8,7 @@ export function Skeleton({ className = "" }: SkeletonProps) {
 
 export function SkeletonCard() {
   return (
-    <div className="rounded-[2rem] bg-dark-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div className="rounded-[2rem] bg-white dark:bg-dark-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
       <div className="aspect-[4/3] skeleton" />
       <div className="p-6 space-y-3">
         <Skeleton className="h-3 w-24" />

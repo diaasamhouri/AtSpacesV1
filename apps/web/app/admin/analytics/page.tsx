@@ -86,7 +86,7 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {/* Revenue Chart */}
-            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Monthly Platform Revenue (Commission)</h2>
                 {revenue?.monthly?.length > 0 ? (
                     <BarChart
@@ -101,7 +101,7 @@ export default function AdminAnalyticsPage() {
 
             {/* Booking Status + User Distribution as Donuts */}
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Booking Status Breakdown</h2>
                     {bookings?.byStatus?.length > 0 ? (
                         <DonutChart
@@ -118,7 +118,7 @@ export default function AdminAnalyticsPage() {
                     )}
                 </div>
 
-                <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">User Distribution by Role</h2>
                     {userGrowth?.byRole?.length > 0 ? (
                         <DonutChart
@@ -137,7 +137,7 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {/* Daily Bookings */}
-            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Daily Bookings (Last 30)</h2>
                 {bookings?.daily?.length > 0 ? (
                     <BarChart
@@ -151,7 +151,7 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {/* User Growth Chart */}
-            <div className="rounded-2xl bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
+            <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Monthly User Growth</h2>
                 {userGrowth?.monthly?.length > 0 ? (
                     <BarChart
