@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -26,11 +28,33 @@ const invoiceInclude = {
 export class InvoicesService {
   constructor(private prisma: PrismaService) {}
 
+  private async getVendorProfileId(userId: string): Promise<string> {
+    const vendor = await this.prisma.vendorProfile.findUnique({ where: { userId } });
+    if (!vendor) throw new BadRequestException('Vendor profile not found');
+    return vendor.id;
+  }
+
   private generateInvoiceNumber(): string {
     return `INV-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   }
 
-  async createInvoice(dto: CreateInvoiceDto) {
+  async createInvoice(userId: string, dto: CreateInvoiceDto) {
+    const vendorProfileId = await this.getVendorProfileId(userId);
+
+    // Verify the booking belongs to one of the vendor's branches
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: dto.bookingId },
+      include: { branch: { select: { vendorProfileId: true } } },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.branch.vendorProfileId !== vendorProfileId) {
+      throw new ForbiddenException('You do not have access to this booking');
+    }
+
     const invoice = await this.prisma.invoice.create({
       data: {
         invoiceNumber: this.generateInvoiceNumber(),
@@ -47,17 +71,20 @@ export class InvoicesService {
     return this.serializeInvoice(invoice);
   }
 
-  async getInvoices(query: {
+  async getInvoices(userId: string, query: {
     page?: number;
     limit?: number;
     status?: string;
     search?: string;
   }) {
+    const vendorProfileId = await this.getVendorProfileId(userId);
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = {
+      booking: { branch: { vendorProfileId } },
+    };
 
     if (query.status) {
       where.status = query.status;
@@ -65,8 +92,8 @@ export class InvoicesService {
 
     if (query.search) {
       where.OR = [
-        { invoiceNumber: { contains: query.search, mode: 'insensitive' } },
-        { customer: { name: { contains: query.search, mode: 'insensitive' } } },
+        { invoiceNumber: { contains: query.search, mode: 'insensitive' }, booking: { branch: { vendorProfileId } } },
+        { customer: { name: { contains: query.search, mode: 'insensitive' } }, booking: { branch: { vendorProfileId } } },
       ];
     }
 
@@ -89,26 +116,47 @@ export class InvoicesService {
     );
   }
 
-  async getInvoice(id: string) {
+  async getInvoice(userId: string, id: string) {
+    const vendorProfileId = await this.getVendorProfileId(userId);
+
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      include: invoiceInclude,
+      include: {
+        ...invoiceInclude,
+        booking: {
+          select: {
+            ...invoiceInclude.booking.select,
+            branch: { select: { ...invoiceInclude.booking.select.branch.select, vendorProfileId: true } },
+          },
+        },
+      },
     });
 
     if (!invoice) {
       throw new NotFoundException('Invoice not found');
     }
 
+    if (invoice.booking?.branch?.vendorProfileId !== vendorProfileId) {
+      throw new ForbiddenException('You do not have access to this invoice');
+    }
+
     return this.serializeInvoice(invoice);
   }
 
-  async updateInvoice(id: string, dto: UpdateInvoiceDto) {
+  async updateInvoice(userId: string, id: string, dto: UpdateInvoiceDto) {
+    const vendorProfileId = await this.getVendorProfileId(userId);
+
     const existing = await this.prisma.invoice.findUnique({
       where: { id },
+      include: { booking: { select: { branch: { select: { vendorProfileId: true } } } } },
     });
 
     if (!existing) {
       throw new NotFoundException('Invoice not found');
+    }
+
+    if (existing.booking?.branch?.vendorProfileId !== vendorProfileId) {
+      throw new ForbiddenException('You do not have access to this invoice');
     }
 
     const data: any = {};
@@ -150,8 +198,13 @@ export class InvoicesService {
     return this.serializeInvoice(invoice);
   }
 
-  async getFinancialStats() {
+  async getFinancialStats(userId: string) {
+    const vendorProfileId = await this.getVendorProfileId(userId);
     const now = new Date();
+
+    // Vendor scoping filters
+    const vendorInvoiceScope = { booking: { branch: { vendorProfileId } } };
+    const vendorBookingScope = { branch: { vendorProfileId } };
 
     // Start of today (UTC)
     const todayStart = new Date(now);
@@ -192,6 +245,7 @@ export class InvoicesService {
       // Today's payments: sum of payments with paidAt today
       this.prisma.invoice.aggregate({
         where: {
+          ...vendorInvoiceScope,
           paidAt: { gte: todayStart, lte: todayEnd },
         },
         _sum: { totalAmount: true },
@@ -200,6 +254,7 @@ export class InvoicesService {
       // Week forecast: sum of bookings with startTime in next 7 days
       this.prisma.booking.aggregate({
         where: {
+          ...vendorBookingScope,
           startTime: { gte: now, lte: next7Days },
         },
         _sum: { totalPrice: true },
@@ -208,6 +263,7 @@ export class InvoicesService {
       // Month forecast: sum of bookings with startTime this month
       this.prisma.booking.aggregate({
         where: {
+          ...vendorBookingScope,
           startTime: { gte: monthStart, lte: monthEnd },
         },
         _sum: { totalPrice: true },
@@ -216,6 +272,7 @@ export class InvoicesService {
       // Year forecast: sum of bookings with startTime this year
       this.prisma.booking.aggregate({
         where: {
+          ...vendorBookingScope,
           startTime: { gte: yearStart, lte: yearEnd },
         },
         _sum: { totalPrice: true },
@@ -224,6 +281,7 @@ export class InvoicesService {
       // Due payments: sum of invoices where status is OVERDUE
       this.prisma.invoice.aggregate({
         where: {
+          ...vendorInvoiceScope,
           status: 'OVERDUE',
         },
         _sum: { totalAmount: true },
@@ -233,18 +291,21 @@ export class InvoicesService {
       this.prisma.invoice.groupBy({
         by: ['customerId'],
         where: {
+          ...vendorInvoiceScope,
           status: 'OVERDUE',
         },
       }),
 
       // Invoices total: sum of all invoice totalAmounts
       this.prisma.invoice.aggregate({
+        where: vendorInvoiceScope,
         _sum: { totalAmount: true },
       }),
 
       // Receipts total: sum of all PAID invoice totalAmounts
       this.prisma.invoice.aggregate({
         where: {
+          ...vendorInvoiceScope,
           status: 'PAID',
         },
         _sum: { totalAmount: true },
@@ -263,7 +324,9 @@ export class InvoicesService {
     };
   }
 
-  async generatePdf(id: string): Promise<Buffer> {
+  async generatePdf(userId: string, id: string): Promise<Buffer> {
+    const vendorProfileId = await this.getVendorProfileId(userId);
+
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {
@@ -273,7 +336,7 @@ export class InvoicesService {
             startTime: true,
             endTime: true,
             numberOfPeople: true,
-            branch: { select: { name: true, address: true, phone: true, email: true } },
+            branch: { select: { name: true, address: true, phone: true, email: true, vendorProfileId: true } },
             service: { select: { name: true, type: true } },
           },
         },
@@ -283,6 +346,10 @@ export class InvoicesService {
 
     if (!invoice) {
       throw new NotFoundException('Invoice not found');
+    }
+
+    if (invoice.booking?.branch?.vendorProfileId !== vendorProfileId) {
+      throw new ForbiddenException('You do not have access to this invoice');
     }
 
     return new Promise((resolve, reject) => {
