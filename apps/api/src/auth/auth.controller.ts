@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import {
   EmailSignupDto,
@@ -44,6 +45,7 @@ export class AuthController {
     return this.authService.signupWithEmail(dto);
   }
 
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @Post('login/email')
   @ApiOperation({ summary: 'Login with email and password' })
   async loginEmail(@Body() dto: EmailLoginDto) {
@@ -52,12 +54,14 @@ export class AuthController {
 
   // ==================== PHONE OTP ====================
 
+  @Throttle({ default: { ttl: 60000, limit: 3 } })
   @Post('otp/send')
   @ApiOperation({ summary: 'Send OTP code to phone number' })
   async sendOtp(@Body() dto: SendOtpDto) {
     return this.authService.sendOtp(dto);
   }
 
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @Post('otp/verify')
   @ApiOperation({ summary: 'Verify OTP code and login/signup' })
   async verifyOtp(@Body() dto: VerifyOtpDto) {
