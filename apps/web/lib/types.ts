@@ -523,7 +523,7 @@ export interface Review {
   replyCreatedAt: string | null;
   createdAt: string;
   branchName?: string;
-  user: { name: string | null; image: string | null } | null;
+  user: { id: string; name: string | null; image: string | null } | null;
 }
 
 export interface VendorBranchDetail {

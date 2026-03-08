@@ -7,8 +7,7 @@ import { useAuth } from "../../lib/auth-context";
 import { useTheme } from "../../lib/theme-context";
 import { motion, AnimatePresence } from "framer-motion";
 import { AtSpacesLogo } from "./at-spaces-logo";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { apiFetch } from "../../lib/api";
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -42,11 +41,8 @@ export function Navbar() {
   // Fetch unread notification count
   useEffect(() => {
     if (!user || !token) return;
-    fetch(`${API_BASE_URL}/auth/notifications/unread-count`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => { if (data) setUnreadCount(data.count); })
+    apiFetch<{ count: number }>('/auth/notifications/unread-count', { token })
+      .then((data) => { setUnreadCount(data.count); })
       .catch(() => {});
   }, [user, token]);
 

@@ -1,31 +1,58 @@
 import { apiFetch } from './api';
+import { Review } from './types';
 
 // ==================== REVIEWS ====================
 
-export async function getBranchReviews(branchId: string) {
-    return apiFetch<any>(`/reviews/branch/${branchId}`, { cache: 'no-store' } as any);
+export interface BranchReviewsResponse {
+    reviews: Review[];
+    averageRating: number;
+    totalReviews: number;
+}
+
+export async function getBranchReviews(branchId: string): Promise<BranchReviewsResponse> {
+    return apiFetch<BranchReviewsResponse>(`/reviews/branch/${branchId}`, { cache: 'no-store' });
 }
 
 export async function createReview(token: string, data: {
     branchId: string; rating: number; comment?: string; bookingId?: string;
-}) {
-    return apiFetch<any>('/reviews', { method: 'POST', token, body: data });
+}): Promise<Review> {
+    return apiFetch<Review>('/reviews', { method: 'POST', token, body: data });
 }
 
-export async function deleteReview(token: string, id: string) {
-    return apiFetch<any>(`/reviews/${id}`, { method: 'DELETE', token });
+export async function deleteReview(token: string, id: string): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>(`/reviews/${id}`, { method: 'DELETE', token });
 }
 
 // ==================== FAVORITES ====================
 
-export async function getUserFavorites(token: string) {
-    return apiFetch<any>('/favorites', { token });
+export interface Favorite {
+    id: string;
+    userId: string;
+    branchId: string;
+    createdAt: string;
+    branch: {
+        id: string;
+        name: string;
+        city: string;
+        address: string;
+        images: string[];
+        amenities: string[];
+        vendor: { companyName: string };
+        services: {
+            type: string;
+            pricing: { price: number; currency: string; interval: string }[];
+        }[];
+    };
 }
 
-export async function toggleFavorite(token: string, branchId: string) {
-    return apiFetch<any>('/favorites/toggle', { method: 'POST', token, body: { branchId } });
+export async function getUserFavorites(token: string): Promise<Favorite[]> {
+    return apiFetch<Favorite[]>('/favorites', { token });
 }
 
-export async function checkFavorite(token: string, branchId: string) {
-    return apiFetch<any>(`/favorites/check/${branchId}`, { token });
+export async function toggleFavorite(token: string, branchId: string): Promise<{ favorited: boolean }> {
+    return apiFetch<{ favorited: boolean }>('/favorites/toggle', { method: 'POST', token, body: { branchId } });
+}
+
+export async function checkFavorite(token: string, branchId: string): Promise<{ favorited: boolean }> {
+    return apiFetch<{ favorited: boolean }>(`/favorites/check/${branchId}`, { token });
 }

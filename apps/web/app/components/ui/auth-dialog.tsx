@@ -5,8 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../../lib/auth-context";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { API_BASE_URL } from "../../../lib/api";
 
 interface AuthDialogProps {
   isOpen: boolean;

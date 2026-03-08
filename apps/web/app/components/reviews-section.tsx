@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../lib/auth-context";
 import { getBranchReviews, createReview, deleteReview } from "../../lib/reviews";
 import { ConfirmDialog } from "./ui/confirm-dialog";
+import { Review } from "../../lib/types";
 
 interface ReviewsSectionProps {
     branchId: string;
@@ -11,7 +12,7 @@ interface ReviewsSectionProps {
 
 export function ReviewsSection({ branchId }: ReviewsSectionProps) {
     const { user, token } = useAuth();
-    const [reviews, setReviews] = useState<any[]>([]);
+    const [reviews, setReviews] = useState<Review[]>([]);
     const [avgRating, setAvgRating] = useState(0);
     const [totalReviews, setTotalReviews] = useState(0);
     const [rating, setRating] = useState(5);
@@ -33,7 +34,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
         } catch { }
     }
 
-    const userHasReviewed = user && reviews.some((r: any) => r.user?.id === user.id);
+    const userHasReviewed = user && reviews.some((r: Review) => r.user?.id === user.id);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -140,7 +141,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
                 <p className="text-slate-500 text-sm">No reviews yet. Be the first to share your experience!</p>
             ) : (
                 <div className="space-y-4">
-                    {reviews.map((review: any) => (
+                    {reviews.map((review: Review) => (
                         <div key={review.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-5">
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-3">
@@ -178,7 +179,7 @@ export function ReviewsSection({ branchId }: ReviewsSectionProps) {
                                             Host Reply
                                         </span>
                                         <span className="text-xs text-slate-500">
-                                            {new Date(review.replyCreatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                            {review.replyCreatedAt && new Date(review.replyCreatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                         </span>
                                     </div>
                                     <p className="text-sm text-slate-600 dark:text-slate-300">{review.vendorReply}</p>
