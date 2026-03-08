@@ -14,6 +14,8 @@ export interface VendorSummary {
   id: string;
   companyName: string;
   logo: string | null;
+  isVerified?: boolean;
+  socialLinks?: Record<string, string>;
 }
 
 export interface PricingItem {
@@ -46,6 +48,7 @@ export interface ServiceItem {
   netSize: number | null;
   shape: RoomShape | null;
   features: string[];
+  minCapacity?: number;
   isActive?: boolean;
   isPublic?: boolean;
   pricing: PricingItem[];
@@ -89,6 +92,8 @@ export interface BranchDetail {
   latitude: number | null;
   longitude: number | null;
   images: string[];
+  amenities: string[];
+  googleMapsUrl: string | null;
   vendor: VendorSummary;
   services: ServiceItem[];
   operatingHours: Record<string, { open: string; close: string } | null> | null;
@@ -423,9 +428,12 @@ export interface VendorProfile {
   website: string | null;
   images: string[];
   socialLinks: Record<string, string> | null;
+  logo?: string | null;
   status: VendorStatus;
   isVerified: boolean;
+  verifiedAt?: string | null;
   verificationRequestedAt: string | null;
+  createdAt?: string;
   companyLegalName: string | null;
   companyShortName: string | null;
   companyTradeName: string | null;
@@ -435,8 +443,6 @@ export interface VendorProfile {
   companySalesTaxNumber: string | null;
   registeredInCountry: string | null;
   hasTaxExemption: boolean;
-  taxRate: number;
-  taxEnabled: boolean;
   companyDescription: string | null;
   authorizedSignatories: AuthorizedSignatory[];
   companyContacts: CompanyContact[];
@@ -687,7 +693,6 @@ export interface Quotation {
   status: QuotationStatus;
   notes: string | null;
   sentAt: string | null;
-  createdById: string;
   createdBy: { name: string | null };
   bookingId: string | null;
   subtotal?: number | null;
