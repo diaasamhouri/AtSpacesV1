@@ -12,9 +12,9 @@ import {
   formatPrice,
   formatPaymentMethod,
   bookingStatusColor,
+  formatSetupType,
 } from "../../../lib/format";
 import type { Booking } from "../../../lib/types";
-import { formatSetupType } from "../../../lib/types";
 
 export default function BookingDetailPage({
   params,

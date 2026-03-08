@@ -24,7 +24,7 @@ export interface CalendarEvent {
     title: string;
     start: Date;
     end: Date;
-    serviceType: "MEETING_ROOM" | "HOT_DESK" | "PRIVATE_OFFICE" | "VIRTUAL_OFFICE" | "EVENT_SPACE" | "PHOTO_STUDIO";
+    serviceType: "MEETING_ROOM" | "HOT_DESK" | "PRIVATE_OFFICE" | "EVENT_SPACE";
     resourceId: string;
     extendedProps: {
         status: string;
@@ -82,17 +82,9 @@ export function VendorCalendar({ events, branches, selectedBranch, onBranchChang
                     backgroundColor = "#8b5cf6";
                     borderColor = "#7c3aed";
                     break;
-                case "VIRTUAL_OFFICE":
-                    backgroundColor = "#64748b";
-                    borderColor = "#475569";
-                    break;
                 case "EVENT_SPACE":
                     backgroundColor = "#f59e0b";
                     borderColor = "#d97706";
-                    break;
-                case "PHOTO_STUDIO":
-                    backgroundColor = "#ec4899";
-                    borderColor = "#db2777";
                     break;
             }
 
@@ -213,8 +205,6 @@ export function VendorCalendar({ events, branches, selectedBranch, onBranchChang
                     { label: "Hot Desk", color: "#10b981" },
                     { label: "Private Office", color: "#8b5cf6" },
                     { label: "Event Space", color: "#f59e0b" },
-                    { label: "Photo Studio", color: "#ec4899" },
-                    { label: "Virtual Office", color: "#64748b" },
                 ].map((item) => (
                     <div key={item.label} className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                         <span

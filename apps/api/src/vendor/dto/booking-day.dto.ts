@@ -1,6 +1,6 @@
 import { IsString, IsOptional, IsNumber, Min, IsInt, IsEnum, IsArray, ValidateNested, IsUUID, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SetupType, PricingInterval, DiscountType } from '@prisma/client';
+import { SetupType, PricingInterval } from '@prisma/client';
 
 export class BookingDayAddOnDto {
     @IsUUID()

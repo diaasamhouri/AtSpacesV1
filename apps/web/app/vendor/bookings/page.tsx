@@ -5,9 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { getVendorBookings, updateBookingStatus, collectVendorPayment, bulkCollectVendorPayments, getVendorPaymentLogs } from "../../../lib/vendor";
 import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../components/ui/toast-provider";
-import { BookingStatus, VendorBooking, PaymentLogEntry, formatSetupType } from "../../../lib/types";
+import { BookingStatus, VendorBooking, PaymentLogEntry } from "../../../lib/types";
 import { format } from "date-fns";
-import { formatBookingStatus, formatPaymentStatus } from "../../../lib/format";
+import { formatBookingStatus, formatPaymentStatus, formatPricingInterval, formatPricingMode, formatSetupType } from "../../../lib/format";
 import StatusBadge from "../../components/ui/status-badge";
 import { Pagination } from "../../components/pagination";
 import { SearchBar } from "../../components/search-bar";
@@ -27,6 +27,7 @@ const STATUSES = [
 ];
 
 function isCashPending(b: VendorBooking) {
+    if (b.status === "NO_SHOW" || b.status === "CANCELLED" || b.status === "REJECTED" || b.status === "EXPIRED") return false;
     return b.payment?.method === "CASH" && b.payment?.status === "PENDING";
 }
 
@@ -320,7 +321,12 @@ export default function VendorBookings() {
                                     <div className="text-xs text-slate-500 dark:text-slate-400">{booking.customer?.phone || "-"}</div>
                                 </div>
                             </div>
-                            <span className="text-sm font-bold text-brand-400">{booking.totalPrice.toFixed(2)} {booking.currency}</span>
+                            <div className="text-right">
+                                <span className="text-sm font-bold text-brand-400">{booking.totalPrice.toFixed(2)} {booking.currency}</span>
+                                {booking.unitPrice != null && booking.pricingInterval && (
+                                    <div className="text-[10px] text-slate-500">{booking.unitPrice.toFixed(2)} / {formatPricingInterval(booking.pricingInterval)}{booking.pricingMode && booking.pricingMode !== "PER_BOOKING" ? ` (${formatPricingMode(booking.pricingMode)})` : ""}</div>
+                                )}
+                            </div>
                         </div>
                         <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">{booking.service.name}</div>
                         {booking.requestedSetup && (
@@ -455,6 +461,12 @@ export default function VendorBookings() {
                                                 <div className="text-sm font-bold text-brand-400 mb-0.5">
                                                     {booking.totalPrice.toFixed(2)} {booking.currency}
                                                 </div>
+                                                {booking.unitPrice != null && booking.pricingInterval && (
+                                                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">
+                                                        {booking.unitPrice.toFixed(2)} JOD / {formatPricingInterval(booking.pricingInterval)}
+                                                        {booking.pricingMode && booking.pricingMode !== "PER_BOOKING" && <span className="ml-1 text-slate-400">({formatPricingMode(booking.pricingMode)})</span>}
+                                                    </div>
+                                                )}
                                                 <div className="flex items-center justify-end gap-2">
                                                     <span className="text-xs font-medium text-slate-500">
                                                         {formatPaymentStatus(booking.payment?.status || "UNPAID")}

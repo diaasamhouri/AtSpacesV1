@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../../../../lib/auth-context";
 import { getVendorBookings } from "../../../../lib/vendor";
 import DataTable from "../../../components/ui/data-table";
 import type { Column } from "../../../components/ui/data-table";
 import type { VendorBooking } from "../../../../lib/types";
-import { formatSetupType } from "../../../../lib/types";
+import { formatSetupType } from "../../../../lib/format";
 import { format } from "date-fns";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -27,6 +28,7 @@ function formatStatusLabel(status: string): string {
 
 export default function BookingOverviewPage() {
   const { token } = useAuth();
+  const router = useRouter();
   const [bookings, setBookings] = useState<VendorBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -157,6 +159,7 @@ export default function BookingOverviewPage() {
         exportTitle="Booking Overview"
         columnVisibility
         emptyMessage="No bookings found"
+        onRowClick={(row) => router.push(`/vendor/bookings?search=${row.id.slice(0, 8)}`)}
       />
       {totalPages > 1 && (
         <div className="flex justify-center gap-2">

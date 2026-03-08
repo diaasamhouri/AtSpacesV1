@@ -11,9 +11,9 @@ import {
   formatServiceType,
   formatPrice,
   bookingStatusColor,
+  formatSetupType,
 } from "../../lib/format";
 import type { Booking } from "../../lib/types";
-import { formatSetupType } from "../../lib/types";
 
 type Tab = "all" | "upcoming" | "past" | "cancelled";
 

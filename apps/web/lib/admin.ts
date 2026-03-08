@@ -227,7 +227,7 @@ export async function exportRevenueCSV(token: string): Promise<string> {
 
 // ==================== PERMISSIONS (Frontend) ====================
 
-export const ADMIN_SECTIONS = {
+const ADMIN_SECTIONS = {
     DASHBOARD: 'DASHBOARD',
     VENDORS: 'VENDORS',
     BOOKINGS: 'BOOKINGS',

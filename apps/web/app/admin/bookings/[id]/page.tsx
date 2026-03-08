@@ -6,12 +6,11 @@ import { useAuth } from "../../../../lib/auth-context";
 import { useToast } from "../../../components/ui/toast-provider";
 import { getAdminBookingById, updateBookingStatus } from "../../../../lib/admin";
 import { format } from "date-fns";
-import { formatBookingStatus, formatServiceType, formatCity } from "../../../../lib/format";
+import { formatBookingStatus, formatServiceType, formatCity, formatSetupType } from "../../../../lib/format";
 import StatusBadge from "../../../components/ui/status-badge";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 import Link from "next/link";
 import type { AdminBookingDetail } from "../../../../lib/types";
-import { formatSetupType } from "../../../../lib/types";
 
 const STATUS_FLOW = ["PENDING", "PENDING_APPROVAL", "CONFIRMED", "CHECKED_IN", "COMPLETED"];
 

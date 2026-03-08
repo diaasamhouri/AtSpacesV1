@@ -203,10 +203,6 @@ export function isSimpleCapacity(type: string): boolean {
   return SIMPLE_CAPACITY_TYPES.includes(type as ServiceType);
 }
 
-export function formatSetupType(setup: string): string {
-  return setup.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
 export interface BookingListResponse {
   data: Booking[];
 }

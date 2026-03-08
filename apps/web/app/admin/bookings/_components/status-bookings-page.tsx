@@ -6,7 +6,7 @@ import { getAdminBookings } from "../../../../lib/admin";
 import DataTable from "../../../components/ui/data-table";
 import type { Column } from "../../../components/ui/data-table";
 import type { AdminBooking } from "../../../../lib/types";
-import { formatSetupType } from "../../../../lib/types";
+import { formatSetupType } from "../../../../lib/format";
 import { format } from "date-fns";
 
 interface AdminStatusBookingsPageProps {

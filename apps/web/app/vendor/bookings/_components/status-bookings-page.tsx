@@ -6,7 +6,7 @@ import { getVendorBookings, approveSales, approveAccountant } from "../../../../
 import DataTable from "../../../components/ui/data-table";
 import type { Column } from "../../../components/ui/data-table";
 import type { VendorBooking } from "../../../../lib/types";
-import { formatSetupType } from "../../../../lib/types";
+import { formatSetupType } from "../../../../lib/format";
 import { format } from "date-fns";
 
 interface StatusBookingsPageProps {

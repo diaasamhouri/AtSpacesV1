@@ -17,10 +17,6 @@ export function formatServiceType(type: string): string {
   return map[type] || type;
 }
 
-export function formatUnitType(type: string): string {
-  return formatServiceType(type);
-}
-
 export function formatServiceTypeSlug(type: string): string {
   return type.toLowerCase().replace(/_/g, '-');
 }
@@ -42,6 +38,15 @@ export function formatPricingInterval(interval: string): string {
     MONTHLY: 'month',
   };
   return map[interval] || interval;
+}
+
+export function formatPricingMode(mode: string): string {
+  const map: Record<string, string> = {
+    PER_BOOKING: 'Flat rate',
+    PER_PERSON: 'Per person',
+    PER_HOUR: 'Per hour',
+  };
+  return map[mode] || mode;
 }
 
 export function formatBookingStatus(status: string): string {
@@ -108,6 +113,30 @@ export function formatUserRole(role: string): string {
     CUSTOMER: 'Customer',
   };
   return map[role] || formatEnumLabel(role);
+}
+
+export function formatRoomShape(shape: string): string {
+  const map: Record<string, string> = {
+    L_SHAPE: 'L-Shape',
+    U_SHAPE: 'U-Shape',
+    RECTANGLE: 'Rectangle',
+    SQUARE: 'Square',
+    OVAL: 'Oval',
+    CUSTOM: 'Custom',
+  };
+  return map[shape] || shape;
+}
+
+export function formatSetupType(setupType: string): string {
+  const map: Record<string, string> = {
+    CLASSROOM: 'Classroom',
+    THEATER: 'Theater',
+    BOARDROOM: 'Boardroom',
+    U_SHAPE_SEATING: 'U-Shape Seating',
+    HOLLOW_SQUARE: 'Hollow Square',
+    BANQUET: 'Banquet',
+  };
+  return map[setupType] || setupType.replace(/_/g, ' ');
 }
 
 export function formatEnumLabel(value: string): string {
