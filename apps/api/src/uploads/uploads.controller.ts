@@ -13,7 +13,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
-import { extname, join } from 'path';
+import { basename, extname, join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import type { Response } from 'express';
 import { v4 as uuid } from 'uuid';
@@ -76,7 +76,11 @@ export class UploadsController {
     @Get(':filename')
     @ApiOperation({ summary: 'Serve an uploaded file' })
     serveFile(@Param('filename') filename: string, @Res() res: Response) {
-        const filePath = join(UPLOAD_DIR, filename);
+        const safeName = basename(filename);
+        if (safeName !== filename || safeName.includes('..')) {
+            throw new BadRequestException('Invalid filename');
+        }
+        const filePath = join(UPLOAD_DIR, safeName);
         if (!existsSync(filePath)) {
             throw new BadRequestException('File not found');
         }
