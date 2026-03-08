@@ -7,8 +7,10 @@ import {
   formatServiceType,
   formatPrice,
   formatPricingInterval,
+  formatPricingMode,
   formatPaymentMethod,
 } from "../../lib/format";
+import { isSetupEligible } from "../../lib/types";
 import type {
   ServiceItem,
   PricingInterval,
@@ -110,11 +112,7 @@ export function BookingModal({
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   // Step 3: Review
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("VISA");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-  const [cardName, setCardName] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [notes, setNotes] = useState("");
   const [requestedSetup, setRequestedSetup] = useState("");
   const [promoCode, setPromoCode] = useState("");
@@ -142,11 +140,7 @@ export function BookingModal({
       setIsAvailable(null);
       setAvailabilityResult(null);
       setCheckingAvailability(false);
-      setPaymentMethod("VISA");
-      setCardNumber("");
-      setCardExpiry("");
-      setCardCvv("");
-      setCardName("");
+      setPaymentMethod("CASH");
       setNotes("");
       setRequestedSetup("");
       setPromoCode("");
@@ -281,35 +275,8 @@ export function BookingModal({
     }
   }
 
-  // Card detail helpers
-  const requiresCardDetails = paymentMethod === "VISA" || paymentMethod === "MASTERCARD";
-
-  function formatCardNumber(value: string) {
-    const digits = value.replace(/\D/g, "").slice(0, 16);
-    return digits.replace(/(.{4})/g, "$1 ").trim();
-  }
-
-  function formatExpiry(value: string) {
-    const digits = value.replace(/\D/g, "").slice(0, 4);
-    if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-    return digits;
-  }
-
-  const cardDigits = cardNumber.replace(/\D/g, "");
-  const isCardNumberValid = cardDigits.length === 16;
-  const expiryDigits = cardExpiry.replace(/\D/g, "");
-  const isExpiryValid = (() => {
-    if (expiryDigits.length !== 4) return false;
-    const month = parseInt(expiryDigits.slice(0, 2), 10);
-    const year = parseInt(expiryDigits.slice(2), 10) + 2000;
-    if (month < 1 || month > 12) return false;
-    const now = new Date();
-    const expDate = new Date(year, month); // first of the month AFTER expiry
-    return expDate > now;
-  })();
-  const isCvvValid = /^\d{3,4}$/.test(cardCvv);
-  const isCardNameValid = cardName.trim().length >= 2;
-  const isCardFormValid = !requiresCardDetails || (isCardNumberValid && isExpiryValid && isCvvValid && isCardNameValid);
+  // Whether the selected payment method requires online payment (not yet supported)
+  const requiresCardDetails = paymentMethod === "VISA" || paymentMethod === "MASTERCARD" || paymentMethod === "APPLE_PAY";
 
   async function handleConfirmBooking() {
     if (!token || !selectedService || !selectedInterval || !selectedPricing)
@@ -483,6 +450,11 @@ export function BookingModal({
                         <span className="font-semibold">
                           {formatPrice(p.price, p.currency)}
                         </span>
+                        {p.pricingMode && p.pricingMode !== 'PER_BOOKING' && (
+                          <span className="block text-[10px] opacity-70 mt-0.5">
+                            {formatPricingMode(p.pricingMode)}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -628,7 +600,7 @@ export function BookingModal({
             </div>
 
             {/* Preferred Room Setup — only for MEETING_ROOM / EVENT_SPACE */}
-            {selectedService && (selectedService.type === "MEETING_ROOM" || selectedService.type === "EVENT_SPACE") && (
+            {selectedService && isSetupEligible(selectedService.type) && (
               <div>
                 <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
                   Preferred Room Setup <span className="text-xs text-slate-500">(Optional)</span>
@@ -788,25 +760,54 @@ export function BookingModal({
                   <span className="text-slate-500 dark:text-slate-400">People</span>
                   <span className="font-medium text-gray-900 dark:text-white">{numberOfPeople}</span>
                 </div>
-                <hr className="border-slate-200 dark:border-slate-700" />
-                <div className="flex justify-between text-base font-bold">
-                  <span className="text-gray-900 dark:text-white">Total</span>
-                  <div className="text-right">
-                    {promoDiscount !== null && selectedPricing && (
-                      <div className="text-sm line-through text-slate-500">
-                        {formatPrice(selectedPricing.price, selectedPricing.currency)}
-                      </div>
-                    )}
-                    <span className="text-brand-500">
-                      {selectedPricing ? formatPrice(
-                        promoDiscount !== null
-                          ? Math.max(0, Number(selectedPricing.price) - (Number(selectedPricing.price) * promoDiscount / 100))
-                          : selectedPricing.price,
-                        selectedPricing.currency,
-                      ) : ""}
-                    </span>
+                {selectedPricing?.pricingMode && selectedPricing.pricingMode !== 'PER_BOOKING' && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Pricing</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{formatPricingMode(selectedPricing.pricingMode)}</span>
                   </div>
-                </div>
+                )}
+                <hr className="border-slate-200 dark:border-slate-700" />
+                {(() => {
+                  if (!selectedPricing) return null;
+                  const unitPrice = Number(selectedPricing.price);
+                  const mode = selectedPricing.pricingMode || 'PER_BOOKING';
+                  let estimatedSubtotal = unitPrice;
+                  let breakdownLabel = '';
+
+                  if (mode === 'PER_PERSON') {
+                    estimatedSubtotal = unitPrice * numberOfPeople;
+                    breakdownLabel = `${formatPrice(unitPrice, selectedPricing.currency)} × ${numberOfPeople} ${numberOfPeople === 1 ? 'person' : 'people'}`;
+                  } else if (mode === 'PER_HOUR' && startHour && endHour) {
+                    const [sh, sm] = startHour.split(':').map(Number);
+                    const [eh, em] = endHour.split(':').map(Number);
+                    const hours = Math.max(((eh! * 60 + em!) - (sh! * 60 + sm!)) / 60, 0);
+                    estimatedSubtotal = unitPrice * hours;
+                    breakdownLabel = `${formatPrice(unitPrice, selectedPricing.currency)} × ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+                  }
+
+                  const finalTotal = promoDiscount !== null
+                    ? Math.max(0, estimatedSubtotal - (estimatedSubtotal * promoDiscount / 100))
+                    : estimatedSubtotal;
+
+                  return (
+                    <div className="flex justify-between text-base font-bold">
+                      <span className="text-gray-900 dark:text-white">Total</span>
+                      <div className="text-right">
+                        {breakdownLabel && (
+                          <div className="text-xs font-normal text-slate-500 mb-0.5">{breakdownLabel}</div>
+                        )}
+                        {promoDiscount !== null && (
+                          <div className="text-sm line-through text-slate-500">
+                            {formatPrice(estimatedSubtotal, selectedPricing.currency)}
+                          </div>
+                        )}
+                        <span className="text-brand-500">
+                          {formatPrice(finalTotal, selectedPricing.currency)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -887,107 +888,15 @@ export function BookingModal({
               </div>
             </div>
 
-            {/* Card details (Visa / Mastercard) */}
+            {/* Online payment notice (Visa / Mastercard / Apple Pay) */}
             {requiresCardDetails && (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-dark-850 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-                  </svg>
-                  <span className="text-xs font-medium text-slate-500">Card details are secure and encrypted</span>
-                </div>
-
-                {/* Card Number */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Card number</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                      placeholder="0000 0000 0000 0000"
-                      maxLength={19}
-                      className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 pl-4 pr-12 py-2.5 text-sm text-gray-900 dark:text-white font-mono tracking-wider focus:border-brand-500 focus:ring-brand-500"
-                    />
-                    {/* Card brand icon in the input */}
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      {paymentMethod === "VISA" ? (
-                        <svg viewBox="0 0 48 32" className="h-5 w-8" fill="none">
-                          <rect width="48" height="32" rx="4" fill="#1A1F71" />
-                          <path d="M19.5 21h-3l1.88-11.5h3L19.5 21Zm-5.12-11.5-2.85 7.88-.34-1.72-.99-5.08s-.12-1.08-1.42-1.08H4.1l-.06.21s1.45.3 3.14 1.32l2.61 10.87h3.13l4.78-12.4h-3.32Zm25.05 11.5h2.76l-2.41-11.5h-2.42c-1.08 0-1.34.84-1.34.84l-4.49 10.66h3.14l.63-1.72h3.83l.3 1.72Zm-3.3-4.1 1.58-4.35.89 4.35h-2.47Zm-5.11-4.67-0.43 2.63s-1.33-.64-2.79-.64c-1.5 0-1.59.78-1.59 1 0 1.1 4.32 1.25 4.32 4.29 0 2.82-2.67 3.49-4.26 3.49-2.14 0-3.37-.73-3.37-.73l.45-2.73s1.62.73 2.87.73c.87 0 1.37-.44 1.37-1.01 0-1.22-4.3-1.33-4.3-4.07 0-2.53 2.16-3.63 4.22-3.63 1.64 0 3.51.67 3.51.67Z" fill="#fff" />
-                        </svg>
-                      ) : (
-                        <svg viewBox="0 0 48 32" className="h-5 w-8" fill="none">
-                          <rect width="48" height="32" rx="4" fill="#252525" />
-                          <circle cx="19" cy="16" r="8" fill="#EB001B" />
-                          <circle cx="29" cy="16" r="8" fill="#F79E1B" />
-                          <path d="M24 9.87a8 8 0 0 1 0 12.26 8 8 0 0 1 0-12.26Z" fill="#FF5F00" />
-                        </svg>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expiry + CVV row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Expiry date</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={cardExpiry}
-                      onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
-                      placeholder="MM/YY"
-                      maxLength={5}
-                      className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white font-mono tracking-wider focus:border-brand-500 focus:ring-brand-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">CVV</label>
-                    <div className="relative">
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        value={cardCvv}
-                        onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                        placeholder="***"
-                        maxLength={4}
-                        className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white font-mono tracking-wider focus:border-brand-500 focus:ring-brand-500"
-                      />
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Cardholder name */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Cardholder name</label>
-                  <input
-                    type="text"
-                    value={cardName}
-                    onChange={(e) => setCardName(e.target.value)}
-                    placeholder="Full name on card"
-                    className="block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-900 px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Apple Pay notice */}
-            {paymentMethod === "APPLE_PAY" && (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-dark-850 p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                <svg viewBox="0 0 24 24" className="h-6 w-6 shrink-0 text-slate-400" fill="currentColor">
-                  <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09ZM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25Z" />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">Apple Pay</p>
-                  <p className="text-xs text-slate-500">You&apos;ll be redirected to Apple Pay to complete your payment securely.</p>
-                </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 text-center">
+                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                  Online payment processing will be available soon.
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Please select Cash as payment method, or contact the vendor directly.
+                </p>
               </div>
             )}
 
@@ -1016,7 +925,7 @@ export function BookingModal({
               </button>
               <button
                 type="button"
-                disabled={loading || !isCardFormValid}
+                disabled={loading || requiresCardDetails}
                 onClick={handleConfirmBooking}
                 className="flex-1 rounded-lg bg-brand-500 active:scale-95 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-brand-600  disabled:opacity-50"
               >
