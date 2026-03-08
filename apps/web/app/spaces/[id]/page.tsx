@@ -7,7 +7,10 @@ import {
   formatServiceType,
   formatPrice,
   formatPricingInterval,
+  formatPricingMode,
+  formatRoomShape,
 } from '../../../lib/format';
+import { isSetupEligible, type BranchDetail, type ServiceItem, type PricingItem } from '../../../lib/types';
 import { BookNowButton } from '../../components/book-now-button';
 import { MotionWrapper } from '../../components/ui/motion-wrapper';
 import type { Metadata } from 'next';
@@ -49,17 +52,17 @@ const DAY_SHORT: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wedne
 export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) {
   const { id } = await params;
 
-  let branch: any;
+  let branch: BranchDetail;
   try {
     branch = await getBranch(id);
   } catch {
     notFound();
   }
 
-  const socialLinks = (branch.vendor?.socialLinks || {}) as Record<string, string>;
+  const socialLinks = branch.vendor?.socialLinks || {};
   const hasSocials = Object.values(socialLinks).some((v) => v && v.trim());
-  const operatingHours = branch.operatingHours as Record<string, { open: string; close: string }> | null;
-  const amenities = (branch.amenities || []) as string[];
+  const operatingHours = branch.operatingHours;
+  const amenities = branch.amenities || [];
   const hasCoords = branch.latitude && branch.longitude;
 
   return (
@@ -82,7 +85,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
         <MotionWrapper type="fade-up" delay={0.1} className="mt-8 max-w-3xl">
           <p className="text-sm font-bold tracking-widest text-brand-500 uppercase mb-2 flex items-center gap-1">
             {branch.vendor?.companyName}
-            {(branch.vendor as any)?.isVerified && <VerifiedBadge size="sm" />}
+            {branch.vendor?.isVerified && <VerifiedBadge size="sm" />}
           </p>
           <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl lg:text-6xl">
             {branch.name}
@@ -188,7 +191,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
             {(hasCoords || branch.googleMapsUrl) && (
               <MotionWrapper type="fade-up" delay={0.4}>
                 <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-6 tracking-tight">Location</h2>
-                {hasCoords && (
+                {branch.latitude != null && branch.longitude != null && (
                   <SpaceMapSection lat={branch.latitude} lng={branch.longitude} name={branch.name} />
                 )}
                 {branch.googleMapsUrl && (
@@ -207,7 +210,7 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
             <MotionWrapper type="fade-up" delay={0.45}>
               <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-8 tracking-tight">Available Options</h2>
               <div className="space-y-6">
-                {branch.services.map((service: any) => (
+                {branch.services.map((service: ServiceItem) => (
                   <div key={service.id}
                     className="rounded-[2.5rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-dark-900 p-8 shadow-float hover:shadow-[0_10px_40px_rgba(255,91,4,0.1)] hover:border-brand-500/50 transition-all duration-500 group">
                     <div className="flex items-start justify-between">
@@ -221,18 +224,46 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
                         {service.description && (
                           <p className="mt-3 text-base text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">{service.description}</p>
                         )}
+                        {(service.floor || service.netSize != null || (service.shape && isSetupEligible(service.type))) && (
+                          <div className="mt-3 flex flex-wrap gap-3">
+                            {service.floor && (
+                              <span className="inline-flex items-center rounded-full bg-slate-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-700 px-3 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">
+                                Floor: {service.floor}
+                              </span>
+                            )}
+                            {service.netSize != null && (
+                              <span className="inline-flex items-center rounded-full bg-slate-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-700 px-3 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">
+                                {service.netSize} sqm
+                              </span>
+                            )}
+                            {service.shape && isSetupEligible(service.type) && (
+                              <span className="inline-flex items-center rounded-full bg-slate-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-700 px-3 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">
+                                {formatRoomShape(service.shape)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {service.features?.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {service.features.map((f: string) => (
+                              <span key={f} className="inline-flex rounded-full bg-brand-500/10 px-3 py-1 text-xs font-bold text-brand-500">{f}</span>
+                            ))}
+                          </div>
+                        )}
                         <p className="mt-5 flex items-center text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-dark-850 max-w-max px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                           <svg className="mr-2 h-4 w-4 text-brand-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
                           </svg>
-                          Fits up to {service.capacity ?? 0} {(service.capacity ?? 0) === 1 ? 'person' : 'people'}
+                          {service.minCapacity != null && service.capacity != null
+                            ? `${service.minCapacity}–${service.capacity} people`
+                            : `Fits up to ${service.capacity ?? 0} ${(service.capacity ?? 0) === 1 ? 'person' : 'people'}`}
                         </p>
                       </div>
                     </div>
 
                     {/* Pricing grid */}
                     <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {service.pricing.map((p: any) => (
+                      {service.pricing.map((p: PricingItem) => (
                         <div key={p.id}
                           className="flex flex-col rounded-[1.5rem] bg-slate-50 dark:bg-dark-850 p-5 border border-slate-200 dark:border-slate-700 shadow-sm transition-transform duration-300 group-hover:-translate-y-1">
                           <span className="text-sm font-bold text-slate-500 mb-1 tracking-wide uppercase">
@@ -241,6 +272,11 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
                           <span className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">
                             {formatPrice(p.price, p.currency)}
                           </span>
+                          {p.pricingMode && p.pricingMode !== 'PER_BOOKING' && (
+                            <span className="text-xs font-medium text-slate-500 mt-0.5">
+                              {formatPricingMode(p.pricingMode)}
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -337,12 +373,12 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div>
             {branch.services.length > 0 && (() => {
-              const allPrices = branch.services.flatMap((s: any) => s.pricing.map((p: any) => ({ price: Number(p.price), currency: p.currency, interval: p.interval })));
-              const lowest = allPrices.sort((a: any, b: any) => a.price - b.price)[0];
+              const allPrices = branch.services.flatMap((s: ServiceItem) => s.pricing.map((p: PricingItem) => ({ price: Number(p.price), currency: p.currency, interval: p.interval, pricingMode: p.pricingMode })));
+              const lowest = allPrices.sort((a, b) => a.price - b.price)[0];
               return lowest ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                   From <span className="text-lg font-bold text-gray-900 dark:text-white">{formatPrice(lowest.price, lowest.currency)}</span>
-                  <span className="text-xs">/{formatPricingInterval(lowest.interval).toLowerCase()}</span>
+                  <span className="text-xs">/{formatPricingInterval(lowest.interval).toLowerCase()}{lowest.pricingMode === 'PER_PERSON' ? ' /person' : lowest.pricingMode === 'PER_HOUR' ? ' /hr' : ''}</span>
                 </p>
               ) : null;
             })()}

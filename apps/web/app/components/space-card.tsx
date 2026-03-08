@@ -7,6 +7,7 @@ import {
   formatCity,
   formatServiceType,
   formatPrice,
+  formatPricingInterval,
 } from '../../lib/format';
 import type { BranchListItem } from '../../lib/types';
 import { FavoriteButton } from './favorite-button';
@@ -45,7 +46,7 @@ export function SpaceCard({ branch, index = 0 }: SpaceCardProps) {
             {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-dark-950/60 via-transparent to-transparent" />
           </div>
-          {(branch.vendor as any).isVerified && (
+          {branch.vendor?.isVerified && (
             <div className="absolute top-3 left-3 z-10 flex items-center gap-1 bg-white/90 dark:bg-dark-800/90 backdrop-blur-sm px-2.5 py-1 rounded-full">
               <VerifiedBadge size="xs" />
               <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">Verified</span>
@@ -65,7 +66,10 @@ export function SpaceCard({ branch, index = 0 }: SpaceCardProps) {
             {branch.startingPrice !== null && (
               <p className="text-sm font-bold text-brand-500 bg-brand-500/10 px-2.5 py-1 rounded-md">
                 {formatPrice(branch.startingPrice)}
-                <span className="text-xs font-medium text-brand-500/70"> /hr</span>
+                <span className="text-xs font-medium text-brand-500/70">
+                  {' '}/{formatPricingInterval(branch.startingPricingInterval || 'HOURLY')}
+                  {branch.startingPricingMode === 'PER_PERSON' && ' /person'}
+                </span>
               </p>
             )}
           </div>
