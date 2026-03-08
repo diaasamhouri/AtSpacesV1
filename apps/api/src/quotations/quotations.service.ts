@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   StreamableFile,
@@ -23,6 +24,13 @@ export class QuotationsService {
   constructor(private prisma: PrismaService) {}
 
   async createQuotation(userId: string, dto: CreateQuotationDto) {
+    if (dto.serviceId) {
+      const service = await this.prisma.service.findUnique({ where: { id: dto.serviceId } });
+      if (service && !service.isActive) {
+        throw new BadRequestException('Service is not active');
+      }
+    }
+
     const referenceNumber = `QT-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
     const quotation = await this.prisma.quotation.create({
@@ -43,6 +51,8 @@ export class QuotationsService {
         discountAmount: dto.discountAmount,
         taxRate: dto.taxRate,
         taxAmount: dto.taxAmount,
+        pricingInterval: dto.pricingInterval,
+        pricingMode: dto.pricingMode,
         ...(dto.lineItems?.length
           ? {
               lineItems: {
@@ -150,11 +160,8 @@ export class QuotationsService {
     });
   }
 
-  async acceptQuotation(id: string) {
-    const quotation = await this.prisma.quotation.findUnique({
-      where: { id },
-    });
-    if (!quotation) throw new NotFoundException('Quotation not found');
+  async acceptQuotation(userId: string, id: string) {
+    const quotation = await this.verifyQuotationOwnership(userId, id);
     if (quotation.status !== 'SENT') {
       throw new BadRequestException('Only sent quotations can be accepted');
     }
@@ -167,11 +174,8 @@ export class QuotationsService {
     return this.serializeQuotation(updated);
   }
 
-  async rejectQuotation(id: string) {
-    const quotation = await this.prisma.quotation.findUnique({
-      where: { id },
-    });
-    if (!quotation) throw new NotFoundException('Quotation not found');
+  async rejectQuotation(userId: string, id: string) {
+    const quotation = await this.verifyQuotationOwnership(userId, id);
     if (quotation.status !== 'SENT') {
       throw new BadRequestException('Only sent quotations can be rejected');
     }
@@ -184,7 +188,8 @@ export class QuotationsService {
     return this.serializeQuotation(updated);
   }
 
-  async updateQuotation(id: string, dto: UpdateQuotationDto) {
+  async updateQuotation(userId: string, id: string, dto: UpdateQuotationDto) {
+    await this.verifyQuotationOwnership(userId, id);
     // Prevent arbitrary status changes through update — use dedicated accept/reject/send endpoints
     if (dto.status) {
       throw new BadRequestException('Use the dedicated /accept, /reject, or /send endpoints to change quotation status');
@@ -229,7 +234,8 @@ export class QuotationsService {
     return this.serializeQuotation(quotation);
   }
 
-  async sendQuotation(id: string) {
+  async sendQuotation(userId: string, id: string) {
+    await this.verifyQuotationOwnership(userId, id);
     const quotation = await this.prisma.quotation.update({
       where: { id },
       data: {
@@ -243,13 +249,7 @@ export class QuotationsService {
   }
 
   async convertToBooking(userId: string, id: string) {
-    const quotation = await this.prisma.quotation.findUnique({
-      where: { id },
-    });
-
-    if (!quotation) {
-      throw new NotFoundException('Quotation not found');
-    }
+    const quotation = await this.verifyQuotationOwnership(userId, id);
 
     if (quotation.status !== 'ACCEPTED') {
       throw new BadRequestException(
@@ -299,7 +299,8 @@ export class QuotationsService {
     };
   }
 
-  async generatePdf(id: string): Promise<Buffer> {
+  async generatePdf(userId: string, id: string): Promise<Buffer> {
+    await this.verifyQuotationOwnership(userId, id);
     const quotation = await this.prisma.quotation.findUnique({
       where: { id },
       include: {
@@ -474,6 +475,18 @@ export class QuotationsService {
     });
   }
 
+  private async verifyQuotationOwnership(userId: string, quotationId: string) {
+    const vendor = await this.prisma.vendorProfile.findUnique({ where: { userId } });
+    if (!vendor) throw new BadRequestException('Vendor profile not found');
+    const quotation = await this.prisma.quotation.findUnique({
+      where: { id: quotationId },
+      include: { branch: { select: { vendorProfileId: true } } },
+    });
+    if (!quotation) throw new NotFoundException('Quotation not found');
+    if (quotation.branch.vendorProfileId !== vendor.id) throw new ForbiddenException('Not your quotation');
+    return quotation;
+  }
+
   private serializeQuotation(quotation: any) {
     return {
       id: quotation.id,
@@ -493,6 +506,8 @@ export class QuotationsService {
       discountAmount: quotation.discountAmount?.toNumber() ?? null,
       taxRate: quotation.taxRate?.toNumber() ?? null,
       taxAmount: quotation.taxAmount?.toNumber() ?? null,
+      pricingInterval: quotation.pricingInterval ?? null,
+      pricingMode: quotation.pricingMode ?? null,
       sentAt: quotation.sentAt?.toISOString() ?? null,
       bookingId: quotation.bookingId,
       createdAt: quotation.createdAt.toISOString(),

@@ -61,16 +61,17 @@ export class QuotationsController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update a quotation' })
   async updateQuotation(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() dto: UpdateQuotationDto,
   ) {
-    return this.quotationsService.updateQuotation(id, dto);
+    return this.quotationsService.updateQuotation(req.user.id, id, dto);
   }
 
   @Get(':id/pdf')
   @ApiOperation({ summary: 'Generate PDF for a quotation' })
-  async generatePdf(@Param('id') id: string, @Res() res: Response) {
-    const buffer = await this.quotationsService.generatePdf(id);
+  async generatePdf(@Req() req: any, @Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.quotationsService.generatePdf(req.user.id, id);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="quotation-${id.slice(0, 8)}.pdf"`,
@@ -81,20 +82,20 @@ export class QuotationsController {
 
   @Post(':id/send')
   @ApiOperation({ summary: 'Mark quotation as SENT' })
-  async sendQuotation(@Param('id') id: string) {
-    return this.quotationsService.sendQuotation(id);
+  async sendQuotation(@Req() req: any, @Param('id') id: string) {
+    return this.quotationsService.sendQuotation(req.user.id, id);
   }
 
   @Post(':id/accept')
   @ApiOperation({ summary: 'Accept a sent quotation' })
-  async acceptQuotation(@Param('id') id: string) {
-    return this.quotationsService.acceptQuotation(id);
+  async acceptQuotation(@Req() req: any, @Param('id') id: string) {
+    return this.quotationsService.acceptQuotation(req.user.id, id);
   }
 
   @Post(':id/reject')
   @ApiOperation({ summary: 'Reject a sent quotation' })
-  async rejectQuotation(@Param('id') id: string) {
-    return this.quotationsService.rejectQuotation(id);
+  async rejectQuotation(@Req() req: any, @Param('id') id: string) {
+    return this.quotationsService.rejectQuotation(req.user.id, id);
   }
 
   @Post(':id/convert')
