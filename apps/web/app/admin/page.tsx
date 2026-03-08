@@ -6,10 +6,9 @@ import { getFinancialStats } from "../../lib/invoices";
 import { useAuth } from "../../lib/auth-context";
 import { format } from "date-fns";
 import StatusBadge from "../components/ui/status-badge";
-import StatCard from "../components/ui/stat-card";
 import SidebarIcon from "../components/ui/sidebar-icon";
 import Link from "next/link";
-import type { AdminBooking, AdminVendor, FinancialReport } from "../../lib/types";
+import type { AdminBooking, AdminVendor, AdminStats, FinancialReport } from "../../lib/types";
 
 function DashboardCard({ label, value, link, color = "brand" }: { label: string; value: string | number; link?: string; color?: string }) {
   const colorMap: Record<string, string> = {
@@ -46,7 +45,7 @@ function SectionHeader({ title }: { title: string }) {
 
 export default function AdminDashboard() {
   const { token } = useAuth();
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [financial, setFinancial] = useState<FinancialReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -153,21 +152,21 @@ export default function AdminDashboard() {
             color="blue"
           />
           <DashboardCard
-            label="Offices"
-            value={stats.offices ?? 0}
-            link="/admin/services"
+            label="Total Vendors"
+            value={stats.vendors ?? 0}
+            link="/admin/vendors"
             color="purple"
           />
           <DashboardCard
-            label="Meeting Rooms"
-            value={stats.meetingRooms ?? 0}
-            link="/admin/services"
-            color="brand"
+            label="Pending Vendors"
+            value={stats.pendingVendors ?? 0}
+            link="/admin/vendors"
+            color="orange"
           />
           <DashboardCard
-            label="Available Units"
-            value={stats.availableUnits ?? 0}
-            link="/admin/services"
+            label="Total Users"
+            value={stats.users ?? 0}
+            link="/admin/users"
             color="green"
           />
         </div>
@@ -184,22 +183,22 @@ export default function AdminDashboard() {
             color="green"
           />
           <DashboardCard
-            label="Expiring Soon (7 days)"
-            value={stats.expiringSoon ?? 0}
-            link="/admin/bookings/expired"
-            color="yellow"
-          />
-          <DashboardCard
-            label="Expired"
-            value={stats.expired ?? 0}
-            link="/admin/bookings/expired"
-            color="red"
+            label="Total Bookings"
+            value={stats.bookings ?? 0}
+            link="/admin/bookings"
+            color="blue"
           />
           <DashboardCard
             label="Pending Approval"
             value={stats.pendingApprovals ?? 0}
             link="/admin/approvals"
             color="orange"
+          />
+          <DashboardCard
+            label="Total Revenue"
+            value={`JOD ${(stats.revenue ?? 0).toFixed(2)}`}
+            link="/admin/payments"
+            color="purple"
           />
         </div>
       </div>

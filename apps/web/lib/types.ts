@@ -22,6 +22,8 @@ export interface PricingItem {
   pricingMode?: PricingMode;
   price: number;
   currency: string;
+  isActive?: boolean;
+  isPublic?: boolean;
 }
 
 export interface SetupConfig {
@@ -44,6 +46,8 @@ export interface ServiceItem {
   netSize: number | null;
   shape: RoomShape | null;
   features: string[];
+  isActive?: boolean;
+  isPublic?: boolean;
   pricing: PricingItem[];
   setupConfigs: SetupConfig[];
 }
@@ -58,6 +62,8 @@ export interface BranchListItem {
   vendor: VendorSummary;
   serviceTypes: ServiceType[];
   startingPrice: number | null;
+  startingPricingMode?: PricingMode | null;
+  startingPricingInterval?: PricingInterval | null;
 }
 
 export interface PaginationMeta {
@@ -137,6 +143,7 @@ export interface Booking {
   notes: string | null;
   requestedSetup?: string | null;
   pricingInterval?: PricingInterval | null;
+  pricingMode?: PricingMode | null;
   unitPrice?: number | null;
   subtotal?: number | null;
   discountType?: DiscountType;
@@ -152,6 +159,28 @@ export interface Booking {
   payment: BookingPayment | null;
 }
 
+/** Service types that use setup configurations (room arrangements) */
+export const SETUP_ELIGIBLE_TYPES: ServiceType[] = ['MEETING_ROOM', 'EVENT_SPACE'];
+/** Service types that use simple min/max capacity */
+export const SIMPLE_CAPACITY_TYPES: ServiceType[] = ['HOT_DESK', 'PRIVATE_OFFICE'];
+
+export const SERVICE_TYPE_OPTIONS = [
+  { value: 'HOT_DESK', label: 'Hot Desk' },
+  { value: 'PRIVATE_OFFICE', label: 'Private Office' },
+  { value: 'MEETING_ROOM', label: 'Meeting Room' },
+  { value: 'EVENT_SPACE', label: 'Event Space' },
+] as const;
+
+export const ROOM_SHAPE_OPTIONS = [
+  { value: '', label: 'None' },
+  { value: 'L_SHAPE', label: 'L-Shape' },
+  { value: 'U_SHAPE', label: 'U-Shape' },
+  { value: 'RECTANGLE', label: 'Rectangle' },
+  { value: 'SQUARE', label: 'Square' },
+  { value: 'OVAL', label: 'Oval' },
+  { value: 'CUSTOM', label: 'Custom' },
+] as const;
+
 export const SETUP_TYPES = [
   { value: 'CLASSROOM', label: 'Classroom' },
   { value: 'THEATER', label: 'Theater' },
@@ -160,6 +189,14 @@ export const SETUP_TYPES = [
   { value: 'HOLLOW_SQUARE', label: 'Hollow Square' },
   { value: 'BANQUET', label: 'Banquet' },
 ] as const;
+
+export function isSetupEligible(type: string): boolean {
+  return SETUP_ELIGIBLE_TYPES.includes(type as ServiceType);
+}
+
+export function isSimpleCapacity(type: string): boolean {
+  return SIMPLE_CAPACITY_TYPES.includes(type as ServiceType);
+}
 
 export function formatSetupType(setup: string): string {
   return setup.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -334,14 +371,16 @@ export interface AdminNotification {
 }
 
 export interface AdminStats {
-  totalVendors: number;
-  totalBranches: number;
-  totalBookings: number;
-  totalRevenue: number;
-  pendingApprovals: number;
-  activeUsers: number;
+  users: number;
+  vendors: number;
+  pendingVendors: number;
+  branches: number;
+  bookings: number;
+  activeBookings: number;
+  revenue: number;
   platformRevenue: number;
   vendorPayouts: number;
+  pendingApprovals: number;
 }
 
 export interface RevenueAnalytics {
@@ -657,6 +696,8 @@ export interface Quotation {
   discountAmount?: number | null;
   taxRate?: number | null;
   taxAmount?: number | null;
+  pricingInterval?: PricingInterval | null;
+  pricingMode?: PricingMode | null;
   lineItems?: QuotationLineItem[];
   createdAt: string;
   updatedAt: string;
@@ -800,6 +841,7 @@ export interface AdminService {
   type: ServiceType;
   capacity: number | null;
   isActive: boolean;
+  isPublic: boolean;
   description: string | null;
   profileNameEn: string | null;
   profileNameAr: string | null;
@@ -810,7 +852,7 @@ export interface AdminService {
   features: string[];
   createdAt: string;
   branch: { id: string; name: string; vendor?: string };
-  pricing: { id: string; interval: PricingInterval; price: number; currency: string }[];
+  pricing: { id: string; interval: PricingInterval; price: number; currency: string; isActive?: boolean; isPublic?: boolean }[];
   setupConfigs: SetupConfig[];
 }
 
