@@ -799,15 +799,39 @@ export class AdminService {
                 },
             });
         } else {
-            // Broadcast to all users
-            const users = await this.prisma.user.findMany({ select: { id: true } });
-            const notifications = users.map(u => ({
-                userId: u.id,
-                type: 'GENERAL' as any,
-                title: data.title,
-                message: data.message,
-            }));
-            return this.prisma.notification.createMany({ data: notifications });
+            // Broadcast to all users in batches to avoid loading all users into memory
+            const batchSize = 1000;
+            let skip = 0;
+            let hasMore = true;
+            let totalCreated = 0;
+
+            while (hasMore) {
+                const users = await this.prisma.user.findMany({
+                    select: { id: true },
+                    take: batchSize,
+                    skip,
+                });
+
+                if (users.length === 0) {
+                    hasMore = false;
+                    break;
+                }
+
+                const result = await this.prisma.notification.createMany({
+                    data: users.map(u => ({
+                        userId: u.id,
+                        type: (data.type as any) || 'GENERAL',
+                        title: data.title,
+                        message: data.message,
+                    })),
+                });
+
+                totalCreated += result.count;
+                skip += batchSize;
+                if (users.length < batchSize) hasMore = false;
+            }
+
+            return { count: totalCreated };
         }
     }
 

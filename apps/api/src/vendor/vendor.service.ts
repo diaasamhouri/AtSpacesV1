@@ -297,6 +297,7 @@ export class VendorService {
             this.prisma.payment.findMany({
                 where: { status: 'COMPLETED', booking: { branch: { vendorProfileId: vp.id } } },
                 orderBy: { createdAt: 'desc' },
+                take: 500,
                 include: {
                     booking: { include: { branch: { select: { name: true } }, service: { select: { name: true, type: true } }, user: { select: { name: true } } } },
                 },
@@ -440,6 +441,7 @@ export class VendorService {
         const reviews = await this.prisma.review.findMany({
             where: { branch: { vendorProfileId: vp.id } },
             orderBy: { createdAt: 'desc' },
+            take: 50,
             include: {
                 user: { select: { name: true, image: true } },
                 branch: { select: { name: true } },
@@ -521,6 +523,7 @@ export class VendorService {
                 branch: { vendorProfileId: vp.id },
                 status: { in: ['CONFIRMED', 'CHECKED_IN'] }
             },
+            take: 1000,
             include: {
                 branch: { select: { name: true } },
                 service: { select: { name: true, type: true } },
@@ -570,6 +573,7 @@ export class VendorService {
                         endTime: { gte: dayStart },
                         status: { notIn: ['CANCELLED', 'REJECTED'] as any },
                     },
+                    take: 1000,
                     include: {
                         user: { select: { name: true } },
                     },
