@@ -17,12 +17,28 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     const redisUrl =
       this.configService.get<string>('REDIS_URL') || 'redis://localhost:6379';
-    this.redisClient = new Redis(redisUrl);
-    this.logger.log('Redis connected');
+    this.redisClient = new Redis(redisUrl, {
+      maxRetriesPerRequest: 3,
+      retryStrategy(times) {
+        const delay = Math.min(times * 200, 3000);
+        return delay;
+      },
+      lazyConnect: false,
+    });
+
+    this.redisClient.on('error', (err) => {
+      this.logger.error(`Redis connection error: ${err.message}`);
+    });
+
+    this.redisClient.on('connect', () => {
+      this.logger.log('Redis connected');
+    });
   }
 
-  onModuleDestroy() {
-    this.redisClient.quit();
+  async onModuleDestroy() {
+    if (this.redisClient) {
+      await this.redisClient.quit();
+    }
   }
 
   async acquireLock(resourceId: string, ttlSeconds: number): Promise<boolean> {
