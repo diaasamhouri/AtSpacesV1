@@ -10,6 +10,12 @@ import { RedisService } from '../redis/redis.service';
 import { CreateBookingDto } from './dto';
 import { buildPaginatedResponse } from '../common/helpers/paginate';
 import { VALID_TRANSITIONS, SETUP_ELIGIBLE_TYPES } from '../common/constants';
+import {
+  validatePromoCode,
+  calculateSubtotal,
+  checkSlotAvailability,
+  calculateTaxFromVendorProfile,
+} from './booking-creation.helper';
 
 @Injectable()
 export class BookingsService {
@@ -113,32 +119,16 @@ export class BookingsService {
 
     try {
       // Check capacity — count overlapping active bookings
-      const overlappingCount = await this.prisma.booking.count({
-        where: {
-          serviceId: dto.serviceId,
-          status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
-          startTime: { lt: endTime },
-          endTime: { gt: startTime },
-        },
-      });
-
-      if (overlappingCount >= (service.capacity ?? 0)) {
-        throw new ConflictException(
-          'No availability for the selected time slot',
-        );
-      }
+      await checkSlotAvailability(
+        this.prisma, dto.serviceId, startTime, endTime,
+        service.capacity ?? 0, 'No availability for the selected time slot',
+      );
 
       // Calculate financial breakdown
       const unitPrice = pricing.price.toNumber();
       const pricingMode = pricing.pricingMode || 'PER_BOOKING';
-
-      let subtotal = unitPrice;
-      if (pricingMode === 'PER_PERSON') {
-        subtotal = unitPrice * dto.numberOfPeople;
-      } else if (pricingMode === 'PER_HOUR') {
-        const hours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
-        subtotal = unitPrice * hours;
-      }
+      const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+      const subtotal = calculateSubtotal(unitPrice, pricingMode, dto.numberOfPeople, durationHours);
 
       // Promo code validation + discount
       let promoCodeRecord: any = null;
@@ -148,49 +138,22 @@ export class BookingsService {
       let promoCodeId: string | null = null;
 
       if (dto.promoCode) {
-        promoCodeRecord = await this.prisma.promoCode.findFirst({
-          where: {
-            code: dto.promoCode.toUpperCase(),
-            isActive: true,
-            OR: [
-              { branchId: service.branch.id },
-              { branchId: null, vendorProfileId: service.branch.vendorProfileId }
-            ]
-          }
-        });
-
-        if (!promoCodeRecord) {
-          throw new BadRequestException('Invalid or inactive promo code');
-        }
-
-        if (promoCodeRecord.validUntil && new Date() > promoCodeRecord.validUntil) {
-          throw new BadRequestException('Promo code has expired');
-        }
-
-        if (promoCodeRecord.maxUses > 0 && promoCodeRecord.currentUses >= promoCodeRecord.maxUses) {
-          throw new BadRequestException('Promo code usage limit reached');
-        }
-
-        discountType = 'PROMO_CODE';
-        discountValue = promoCodeRecord.discountPercent;
-        discountAmount = (subtotal * promoCodeRecord.discountPercent) / 100;
-        promoCodeId = promoCodeRecord.id;
+        const promoResult = await validatePromoCode(
+          this.prisma, dto.promoCode, service.branch.vendorProfileId, service.branch.id, subtotal,
+        );
+        promoCodeRecord = promoResult.promoCodeRecord;
+        discountType = promoResult.discountType;
+        discountValue = promoResult.discountValue;
+        discountAmount = promoResult.discountAmount;
+        promoCodeId = promoResult.promoCodeId;
       }
 
       const afterDiscount = Math.max(0, subtotal - discountAmount);
 
       // Tax calculation from vendor profile
-      const vendorProfile = await this.prisma.vendorProfile.findUnique({
-        where: { id: service.branch.vendorProfileId },
-        select: { taxRate: true, taxEnabled: true },
-      });
-
-      let taxRate: number | null = null;
-      let taxAmount = 0;
-      if (vendorProfile?.taxEnabled) {
-        taxRate = (vendorProfile.taxRate as any).toNumber?.() ?? Number(vendorProfile.taxRate);
-        taxAmount = (afterDiscount * taxRate!) / 100;
-      }
+      const { taxRate, taxAmount } = await calculateTaxFromVendorProfile(
+        this.prisma, service.branch.vendorProfileId, afterDiscount,
+      );
 
       const totalPrice = afterDiscount + taxAmount;
 

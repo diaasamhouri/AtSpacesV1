@@ -9,6 +9,7 @@ import { ValidatePromoDto } from './dto/validate-promo.dto';
 import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { SETUP_ELIGIBLE_TYPES } from '../common/constants';
+import { calculateSubtotal, checkSlotAvailability } from '../bookings/booking-creation.helper';
 
 @Injectable()
 export class VendorService {
@@ -1065,14 +1066,14 @@ export class VendorService {
             dayPricingModes.push(dayPricingMode);
 
             // Apply pricing mode multiplier
-            if (dayPricingMode === 'PER_PERSON' && day.numberOfPeople && day.numberOfPeople > 1) {
-                daySubtotal = daySubtotal * day.numberOfPeople;
-            } else if (dayPricingMode === 'PER_HOUR' && day.startTime && day.endTime) {
+            const numberOfPeopleForCalc = day.numberOfPeople ?? 1;
+            let durationHours = 0;
+            if (day.startTime && day.endTime) {
                 const [sh, sm] = day.startTime.split(':').map(Number) as [number, number];
                 const [eh, em] = day.endTime.split(':').map(Number) as [number, number];
-                const hours = Math.max(((eh * 60 + em) - (sh * 60 + sm)) / 60, 0);
-                daySubtotal = daySubtotal * hours;
+                durationHours = Math.max(((eh * 60 + em) - (sh * 60 + sm)) / 60, 0);
             }
+            daySubtotal = calculateSubtotal(daySubtotal, dayPricingMode, numberOfPeopleForCalc, durationHours);
 
             if (day.addOns) {
                 for (const addOn of day.addOns) {
@@ -1155,17 +1156,10 @@ export class VendorService {
 
             try {
                 if (effectiveCapacity > 0) {
-                    const overlappingCount = await this.prisma.booking.count({
-                        where: {
-                            serviceId: day.serviceId,
-                            status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
-                            startTime: { lt: endTime },
-                            endTime: { gt: startTime },
-                        },
-                    });
-                    if (overlappingCount >= effectiveCapacity) {
-                        throw new ConflictException(`No availability for ${day.date}`);
-                    }
+                    await checkSlotAvailability(
+                        this.prisma, day.serviceId, startTime, endTime,
+                        effectiveCapacity, `No availability for ${day.date}`,
+                    );
                 }
 
                 const booking = await this.prisma.booking.create({
