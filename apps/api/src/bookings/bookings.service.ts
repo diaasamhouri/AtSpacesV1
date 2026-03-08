@@ -802,27 +802,55 @@ export class BookingsService {
       })
       : services;
 
+    // Build date ranges to check
+    const dateRanges = datesToCheck.map(dateStr => ({
+      dateStr,
+      dayStart: new Date(`${dateStr}T${startTime}:00`),
+      dayEnd: new Date(`${dateStr}T${endTime}:00`),
+    }));
+
+    // Fetch all overlapping bookings in ONE query instead of O(services * dates)
+    const serviceIds = filteredServices.map(s => s.id);
+    const overlappingBookings = serviceIds.length > 0 && dateRanges.length > 0
+      ? await this.prisma.booking.findMany({
+          where: {
+            serviceId: { in: serviceIds },
+            status: { in: ['CONFIRMED', 'CHECKED_IN', 'PENDING', 'PENDING_APPROVAL'] },
+            OR: dateRanges.map(({ dayStart, dayEnd }) => ({
+              startTime: { lt: dayEnd },
+              endTime: { gt: dayStart },
+            })),
+          },
+          select: { serviceId: true, startTime: true, endTime: true },
+        })
+      : [];
+
+    // Build a count map: serviceId -> dateStr -> bookingCount
+    const countMap = new Map<string, Map<string, number>>();
+    for (const booking of overlappingBookings) {
+      for (const { dateStr, dayStart, dayEnd } of dateRanges) {
+        if (booking.startTime < dayEnd && booking.endTime > dayStart) {
+          let serviceMap = countMap.get(booking.serviceId);
+          if (!serviceMap) {
+            serviceMap = new Map();
+            countMap.set(booking.serviceId, serviceMap);
+          }
+          serviceMap.set(dateStr, (serviceMap.get(dateStr) || 0) + 1);
+        }
+      }
+    }
+
     const results: any[] = [];
     for (const service of filteredServices) {
       const effectiveCapacity = service.setupConfigs.length > 0
         ? Math.max(...service.setupConfigs.map(c => c.maxPeople))
         : service.capacity ?? 0;
 
-      // Check availability across ALL selected dates
+      // Check availability across ALL selected dates using the pre-fetched counts
       let worstRemaining = effectiveCapacity;
-      for (const dateStr of datesToCheck) {
-        const dayStart = new Date(`${dateStr}T${startTime}:00`);
-        const dayEnd = new Date(`${dateStr}T${endTime}:00`);
-
-        const bookingCount = await this.prisma.booking.count({
-          where: {
-            serviceId: service.id,
-            status: { in: ['CONFIRMED', 'CHECKED_IN', 'PENDING', 'PENDING_APPROVAL'] },
-            startTime: { lt: dayEnd },
-            endTime: { gt: dayStart },
-          },
-        });
-
+      const serviceCountMap = countMap.get(service.id);
+      for (const { dateStr } of dateRanges) {
+        const bookingCount = serviceCountMap?.get(dateStr) || 0;
         const remaining = effectiveCapacity - bookingCount;
         if (remaining < worstRemaining) {
           worstRemaining = remaining;
