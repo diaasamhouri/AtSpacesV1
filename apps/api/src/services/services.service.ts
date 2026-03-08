@@ -1,11 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceDto, UpdateServiceDto } from './dto';
-
-/** Service types that support setup configurations (room arrangements) */
-const SETUP_ELIGIBLE_TYPES = ['MEETING_ROOM', 'EVENT_SPACE'];
-/** Service types that use simple min/max capacity */
-const SIMPLE_CAPACITY_TYPES = ['HOT_DESK', 'PRIVATE_OFFICE'];
+import { SETUP_ELIGIBLE_TYPES } from '../common/constants';
 
 @Injectable()
 export class ServicesService {

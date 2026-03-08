@@ -8,6 +8,7 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { ValidatePromoDto } from './dto/validate-promo.dto';
 import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
+import { SETUP_ELIGIBLE_TYPES } from '../common/constants';
 
 @Injectable()
 export class VendorService {
@@ -151,10 +152,15 @@ export class VendorService {
             select: {
                 id: true, companyName: true, description: true, phone: true, website: true,
                 images: true, socialLinks: true, status: true, isVerified: true,
+                verifiedAt: true, verificationRequestedAt: true,
                 companyLegalName: true, companyShortName: true, companyTradeName: true,
                 companyNationalId: true, companyRegistrationNumber: true, companyRegistrationDate: true,
                 companySalesTaxNumber: true, registeredInCountry: true, hasTaxExemption: true,
                 companyDescription: true,
+                authorizedSignatories: true,
+                companyContacts: true,
+                departmentContacts: true,
+                bankingInfo: true,
             },
         });
     }
@@ -486,6 +492,24 @@ export class VendorService {
         return updated;
     }
 
+    async deleteReviewReply(userId: string, reviewId: string) {
+        const vp = await this.getApprovedVendorProfile(userId);
+
+        const review = await this.prisma.review.findUnique({
+            where: { id: reviewId },
+            include: { branch: true },
+        });
+
+        if (!review) throw new NotFoundException('Review not found');
+        if (review.branch.vendorProfileId !== vp.id) throw new ForbiddenException('Review does not belong to your branches');
+        if (!review.vendorReply) throw new BadRequestException('No reply to delete');
+
+        return this.prisma.review.update({
+            where: { id: reviewId },
+            data: { vendorReply: null, replyCreatedAt: null },
+        });
+    }
+
     // ==================== CALENDAR ====================
 
     async getCalendarEvents(userId: string) {
@@ -659,6 +683,20 @@ export class VendorService {
         const vp = await this.getApprovedVendorProfile(userId);
         const promo = await this.prisma.promoCode.findFirst({ where: { id: promoId, vendorProfileId: vp.id } });
         if (!promo) throw new NotFoundException('Promo code not found');
+
+        // Prevent deletion if the code is actively used by pending/confirmed bookings
+        const activeUsageCount = await this.prisma.booking.count({
+            where: {
+                promoCodeId: promoId,
+                status: { in: ['PENDING', 'PENDING_APPROVAL', 'CONFIRMED', 'CHECKED_IN'] },
+            },
+        });
+
+        if (activeUsageCount > 0) {
+            throw new BadRequestException(
+                `Cannot delete this promo code — it is used by ${activeUsageCount} active booking${activeUsageCount > 1 ? 's' : ''}. Cancel or complete them first.`,
+            );
+        }
 
         await this.prisma.promoCode.delete({ where: { id: promoId } });
         return { message: 'Promo code deleted' };
@@ -1012,19 +1050,28 @@ export class VendorService {
         let aggregateSubtotal = 0;
         const daySubtotals: number[] = [];
 
+        const dayPricingModes: string[] = [];
+
         for (const day of dto.days) {
             let daySubtotal = day.unitPrice || 0;
 
-            // Multiply by number of people if pricing mode is PER_PERSON
-            if (day.numberOfPeople && day.numberOfPeople > 1 && day.serviceId) {
-                const pricingRecord = day.pricingInterval
-                    ? await this.prisma.servicePricing.findFirst({
-                        where: { serviceId: day.serviceId, interval: day.pricingInterval as any, isActive: true },
-                    })
-                    : null;
-                if (pricingRecord?.pricingMode === 'PER_PERSON') {
-                    daySubtotal = daySubtotal * day.numberOfPeople;
-                }
+            // Look up pricing mode from the service pricing record
+            const pricingRecord = day.pricingInterval && day.serviceId
+                ? await this.prisma.servicePricing.findFirst({
+                    where: { serviceId: day.serviceId, interval: day.pricingInterval as any, isActive: true },
+                })
+                : null;
+            const dayPricingMode = pricingRecord?.pricingMode || 'PER_BOOKING';
+            dayPricingModes.push(dayPricingMode);
+
+            // Apply pricing mode multiplier
+            if (dayPricingMode === 'PER_PERSON' && day.numberOfPeople && day.numberOfPeople > 1) {
+                daySubtotal = daySubtotal * day.numberOfPeople;
+            } else if (dayPricingMode === 'PER_HOUR' && day.startTime && day.endTime) {
+                const [sh, sm] = day.startTime.split(':').map(Number) as [number, number];
+                const [eh, em] = day.endTime.split(':').map(Number) as [number, number];
+                const hours = Math.max(((eh * 60 + em) - (sh * 60 + sm)) / 60, 0);
+                daySubtotal = daySubtotal * hours;
             }
 
             if (day.addOns) {
@@ -1078,7 +1125,7 @@ export class VendorService {
                 : service.capacity ?? 0;
 
             // Reject setup type for non-eligible service types
-            if (day.setupType && !['MEETING_ROOM', 'EVENT_SPACE'].includes(service.type)) {
+            if (day.setupType && !SETUP_ELIGIBLE_TYPES.includes(service.type)) {
                 throw new BadRequestException(
                     `Setup type is only available for Meeting Room and Event Space (service: ${service.type})`,
                 );
@@ -1134,6 +1181,7 @@ export class VendorService {
                         notes: day.notes || dto.notes,
                         requestedSetup: day.setupType ?? null,
                         pricingInterval: day.pricingInterval ?? null,
+                        pricingMode: dayPricingModes[i] as any,
                         unitPrice: day.unitPrice ?? null,
                         subtotal: daySubtotal,
                         discountType: resolvedDiscountType as any,

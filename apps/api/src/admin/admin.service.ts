@@ -4,6 +4,7 @@ import { VendorStatus, BookingStatus, Role, ServiceType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { buildPaginatedResponse } from '../common/helpers/paginate';
 import { CreateServiceDto } from '../services/dto';
+import { VALID_TRANSITIONS } from '../common/constants';
 
 @Injectable()
 export class AdminService {
@@ -422,23 +423,11 @@ export class AdminService {
         };
     }
 
-    private static readonly VALID_TRANSITIONS: Record<string, string[]> = {
-        PENDING: ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'],
-        PENDING_APPROVAL: ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'],
-        CONFIRMED: ['CHECKED_IN', 'CANCELLED', 'NO_SHOW'],
-        CHECKED_IN: ['COMPLETED', 'NO_SHOW'],
-        COMPLETED: [],
-        CANCELLED: [],
-        REJECTED: [],
-        EXPIRED: [],
-        NO_SHOW: [],
-    };
-
     async updateBookingStatus(bookingId: string, status: BookingStatus) {
         const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
         if (!booking) throw new NotFoundException('Booking not found');
 
-        const allowed = AdminService.VALID_TRANSITIONS[booking.status] ?? [];
+        const allowed = VALID_TRANSITIONS[booking.status] ?? [];
         if (!allowed.includes(status)) {
             throw new BadRequestException(
                 `Cannot transition from ${booking.status} to ${status}`,

@@ -9,8 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateBookingDto } from './dto';
 import { buildPaginatedResponse } from '../common/helpers/paginate';
-
-const SETUP_ELIGIBLE_TYPES = ['MEETING_ROOM', 'EVENT_SPACE'];
+import { VALID_TRANSITIONS, SETUP_ELIGIBLE_TYPES } from '../common/constants';
 
 @Injectable()
 export class BookingsService {
@@ -18,19 +17,6 @@ export class BookingsService {
     private prisma: PrismaService,
     private redis: RedisService,
   ) { }
-
-  /** Allowed booking status transitions */
-  private static readonly VALID_TRANSITIONS: Record<string, string[]> = {
-    PENDING: ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'],
-    PENDING_APPROVAL: ['CONFIRMED', 'REJECTED', 'CANCELLED', 'EXPIRED'],
-    CONFIRMED: ['CHECKED_IN', 'CANCELLED', 'NO_SHOW'],
-    CHECKED_IN: ['COMPLETED', 'NO_SHOW'],
-    COMPLETED: [],
-    CANCELLED: [],
-    REJECTED: [],
-    EXPIRED: [],
-    NO_SHOW: [],
-  };
 
   async createBooking(userId: string, dto: CreateBookingDto) {
     const startTime = new Date(dto.startTime);
@@ -438,7 +424,7 @@ export class BookingsService {
     }
 
     // Validate status transition
-    const allowed = BookingsService.VALID_TRANSITIONS[booking.status] ?? [];
+    const allowed = VALID_TRANSITIONS[booking.status] ?? [];
     if (!allowed.includes(status)) {
       throw new BadRequestException(
         `Cannot transition from ${booking.status} to ${status}`,
