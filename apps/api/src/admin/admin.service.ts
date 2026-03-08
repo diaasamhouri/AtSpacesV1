@@ -1010,6 +1010,7 @@ export class AdminService {
                 description: s.description,
                 capacity: s.capacity,
                 isActive: s.isActive,
+                isPublic: s.isPublic,
                 floor: s.floor,
                 profileNameEn: s.profileNameEn,
                 profileNameAr: s.profileNameAr,
@@ -1019,7 +1020,7 @@ export class AdminService {
                 features: s.features,
                 createdAt: s.createdAt,
                 branch: { id: s.branch.id, name: s.branch.name, vendor: s.branch.vendor.companyName },
-                pricing: s.pricing.map(p => ({ id: p.id, interval: p.interval, price: p.price.toNumber(), currency: p.currency })),
+                pricing: s.pricing.map(p => ({ id: p.id, interval: p.interval, pricingMode: p.pricingMode, isPublic: p.isPublic, price: p.price.toNumber(), currency: p.currency })),
                 setupConfigs: s.setupConfigs.map(c => ({ setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
             })),
             total, page, limit,
@@ -1047,6 +1048,7 @@ export class AdminService {
             description: service.description,
             capacity: service.capacity,
             isActive: service.isActive,
+            isPublic: service.isPublic,
             floor: service.floor,
             profileNameEn: service.profileNameEn,
             profileNameAr: service.profileNameAr,
@@ -1056,7 +1058,7 @@ export class AdminService {
             features: service.features,
             createdAt: service.createdAt,
             branch: { id: service.branch.id, name: service.branch.name, vendor: service.branch.vendor.companyName },
-            pricing: service.pricing.map(p => ({ id: p.id, interval: p.interval, price: p.price.toNumber(), currency: p.currency })),
+            pricing: service.pricing.map(p => ({ id: p.id, interval: p.interval, pricingMode: p.pricingMode, isPublic: p.isPublic, price: p.price.toNumber(), currency: p.currency })),
             setupConfigs: service.setupConfigs.map(c => ({ setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
         };
     }
@@ -1088,8 +1090,9 @@ export class AdminService {
                 netSize: dto.netSize,
                 shape: dto.shape,
                 features: dto.features,
+                isPublic: dto.isPublic ?? true,
                 pricing: {
-                    create: dto.pricing.map(p => ({ interval: p.interval, price: p.price })),
+                    create: dto.pricing.map(p => ({ interval: p.interval, pricingMode: p.pricingMode ?? 'PER_BOOKING', price: p.price, isPublic: p.isPublic ?? true })),
                 },
                 setupConfigs: dto.setupConfigs && dto.setupConfigs.length > 0 ? {
                     create: dto.setupConfigs.map(c => ({ setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
@@ -1119,12 +1122,13 @@ export class AdminService {
         if (dto.shape !== undefined) updateData.shape = dto.shape;
         if (dto.unitNumber !== undefined) updateData.unitNumber = dto.unitNumber;
         if (dto.features !== undefined) updateData.features = dto.features;
+        if (dto.isPublic !== undefined) updateData.isPublic = dto.isPublic;
 
         if (dto.pricing && dto.pricing.length > 0) {
             await this.prisma.$transaction([
                 this.prisma.servicePricing.deleteMany({ where: { serviceId: id } }),
                 this.prisma.servicePricing.createMany({
-                    data: dto.pricing.map((p: any) => ({ serviceId: id, interval: p.interval, price: p.price })),
+                    data: dto.pricing.map((p: any) => ({ serviceId: id, interval: p.interval, pricingMode: p.pricingMode ?? 'PER_BOOKING', price: p.price, isPublic: p.isPublic ?? true })),
                 }),
             ]);
         }

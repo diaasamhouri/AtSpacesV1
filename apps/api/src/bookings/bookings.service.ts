@@ -10,6 +10,8 @@ import { RedisService } from '../redis/redis.service';
 import { CreateBookingDto } from './dto';
 import { buildPaginatedResponse } from '../common/helpers/paginate';
 
+const SETUP_ELIGIBLE_TYPES = ['MEETING_ROOM', 'EVENT_SPACE'];
+
 @Injectable()
 export class BookingsService {
   constructor(
@@ -52,12 +54,12 @@ export class BookingsService {
     const service = await this.prisma.service.findUnique({
       where: { id: dto.serviceId },
       include: {
-        pricing: { where: { isActive: true } },
+        pricing: { where: { isActive: true, isPublic: true } },
         branch: { select: { id: true, status: true, vendorProfileId: true, autoAcceptBookings: true, operatingHours: true } },
       },
     });
 
-    if (!service || !service.isActive) {
+    if (!service || !service.isActive || !service.isPublic) {
       throw new NotFoundException('Service not found or inactive');
     }
 
@@ -76,7 +78,7 @@ export class BookingsService {
     }
 
     // Reject requestedSetup for non-eligible service types
-    if (dto.requestedSetup && !['MEETING_ROOM', 'EVENT_SPACE'].includes(service.type)) {
+    if (dto.requestedSetup && !SETUP_ELIGIBLE_TYPES.includes(service.type)) {
       throw new BadRequestException('Setup type is only available for Meeting Room and Event Space');
     }
 
@@ -142,7 +144,7 @@ export class BookingsService {
 
       // Calculate financial breakdown
       const unitPrice = pricing.price.toNumber();
-      const pricingMode = (pricing as any).pricingMode || 'PER_BOOKING';
+      const pricingMode = pricing.pricingMode || 'PER_BOOKING';
 
       let subtotal = unitPrice;
       if (pricingMode === 'PER_PERSON') {
@@ -223,6 +225,7 @@ export class BookingsService {
           numberOfPeople: dto.numberOfPeople,
           totalPrice,
           pricingInterval: dto.pricingInterval,
+          pricingMode: pricingMode as any,
           unitPrice,
           subtotal,
           discountType: discountType as any,
@@ -248,6 +251,7 @@ export class BookingsService {
           },
           service: { select: { id: true, type: true, name: true } },
           payment: true,
+          addOns: true,
         },
       });
 
@@ -360,6 +364,7 @@ export class BookingsService {
         branch: { select: { id: true, name: true, city: true, address: true } },
         service: { select: { id: true, type: true, name: true } },
         payment: true,
+        addOns: true,
       },
     });
 
@@ -402,6 +407,7 @@ export class BookingsService {
           branch: { select: { id: true, name: true, city: true, address: true } },
           service: { select: { id: true, type: true, name: true } },
           payment: true,
+          addOns: true,
           user: { select: { name: true, email: true, phone: true } },
         },
       }),
@@ -458,6 +464,7 @@ export class BookingsService {
         branch: { select: { id: true, name: true, city: true, address: true } },
         service: { select: { id: true, type: true, name: true } },
         payment: true,
+        addOns: true,
       }
     });
 
@@ -532,6 +539,7 @@ export class BookingsService {
         branch: { select: { id: true, name: true, city: true, address: true } },
         service: { select: { id: true, type: true, name: true } },
         payment: true,
+        addOns: true,
       },
     });
 
@@ -558,6 +566,7 @@ export class BookingsService {
         branch: { select: { id: true, name: true, city: true, address: true } },
         service: { select: { id: true, type: true, name: true } },
         payment: true,
+        addOns: true,
       },
     });
 
@@ -597,6 +606,7 @@ export class BookingsService {
         branch: { select: { id: true, name: true, city: true, address: true } },
         service: { select: { id: true, type: true, name: true } },
         payment: true,
+        addOns: true,
       },
     });
 
@@ -637,7 +647,7 @@ export class BookingsService {
       },
     });
 
-    if (!service || !service.isActive) {
+    if (!service || !service.isActive || !service.isPublic) {
       throw new NotFoundException('Service not found or inactive');
     }
 
@@ -817,7 +827,7 @@ export class BookingsService {
       datesToCheck.push(startDate);
     }
 
-    const where: any = { isActive: true, branch: { status: 'ACTIVE' } };
+    const where: any = { isActive: true, isPublic: true, branch: { status: 'ACTIVE' } };
     if (branchId) where.branchId = branchId;
     if (unitType) where.type = unitType;
 
@@ -825,19 +835,21 @@ export class BookingsService {
       where,
       include: {
         branch: { select: { id: true, name: true } },
-        pricing: { where: { isActive: true }, select: { interval: true, pricingMode: true, price: true, currency: true } },
+        pricing: { where: { isActive: true, isPublic: true }, select: { interval: true, pricingMode: true, price: true, currency: true } },
         setupConfigs: { select: { setupType: true, minPeople: true, maxPeople: true } },
       },
       orderBy: { name: 'asc' },
     });
 
-    // Filter by capacity across setup configs or legacy capacity
+    // Filter by capacity across setup configs or min/max capacity
     const filteredServices = capacity
       ? services.filter(s => {
         if (s.setupConfigs.length > 0) {
           return s.setupConfigs.some(c => c.minPeople <= capacity && c.maxPeople >= capacity);
         }
-        return (s.capacity ?? 0) >= capacity;
+        const min = s.minCapacity ?? 1;
+        const max = s.capacity ?? 0;
+        return min <= capacity && max >= capacity;
       })
       : services;
 
@@ -868,12 +880,21 @@ export class BookingsService {
         }
       }
 
+      const effectiveMinCapacity = service.setupConfigs.length > 0
+        ? Math.min(...service.setupConfigs.map(c => c.minPeople))
+        : service.minCapacity ?? 1;
+
       results.push({
         id: service.id,
         name: service.name,
         unitNumber: service.unitNumber,
         type: service.type,
         capacity: effectiveCapacity,
+        minCapacity: effectiveMinCapacity,
+        floor: service.floor,
+        description: service.description,
+        features: service.features,
+        netSize: service.netSize ? service.netSize.toNumber() : null,
         branchName: service.branch.name,
         branchId: service.branch.id,
         available: worstRemaining > 0,
@@ -884,7 +905,7 @@ export class BookingsService {
           price: p.price.toNumber(),
           currency: p.currency,
         })),
-        setupConfigs: ['MEETING_ROOM', 'EVENT_SPACE'].includes(service.type)
+        setupConfigs: SETUP_ELIGIBLE_TYPES.includes(service.type)
           ? service.setupConfigs.map(c => ({
               setupType: c.setupType,
               minPeople: c.minPeople,
@@ -908,6 +929,26 @@ export class BookingsService {
       currency: booking.currency,
       notes: booking.notes,
       requestedSetup: booking.requestedSetup ?? null,
+      pricingInterval: booking.pricingInterval ?? null,
+      pricingMode: booking.pricingMode ?? null,
+      unitPrice: booking.unitPrice ? booking.unitPrice.toNumber() : null,
+      subtotal: booking.subtotal ? booking.subtotal.toNumber() : null,
+      discountType: booking.discountType ?? 'NONE',
+      discountValue: booking.discountValue ? booking.discountValue.toNumber() : null,
+      discountAmount: booking.discountAmount ? booking.discountAmount.toNumber() : null,
+      taxRate: booking.taxRate ? booking.taxRate.toNumber() : null,
+      taxAmount: booking.taxAmount ? booking.taxAmount.toNumber() : null,
+      bookingGroupId: booking.bookingGroupId ?? null,
+      addOns: booking.addOns?.map((a: any) => ({
+        id: a.id,
+        vendorAddOnId: a.vendorAddOnId,
+        name: a.name,
+        unitPrice: a.unitPrice.toNumber(),
+        quantity: a.quantity,
+        totalPrice: a.totalPrice.toNumber(),
+        serviceTime: a.serviceTime?.toISOString() ?? null,
+        comments: a.comments,
+      })) ?? [],
       createdAt: booking.createdAt.toISOString(),
       branch: booking.branch,
       service: booking.service,

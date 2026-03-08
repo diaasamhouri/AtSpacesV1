@@ -2,8 +2,10 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceDto, UpdateServiceDto } from './dto';
 
-/** Service types that support setup configurations */
+/** Service types that support setup configurations (room arrangements) */
 const SETUP_ELIGIBLE_TYPES = ['MEETING_ROOM', 'EVENT_SPACE'];
+/** Service types that use simple min/max capacity */
+const SIMPLE_CAPACITY_TYPES = ['HOT_DESK', 'PRIVATE_OFFICE'];
 
 @Injectable()
 export class ServicesService {
@@ -37,10 +39,13 @@ export class ServicesService {
             throw new BadRequestException('Setup configurations are only available for Meeting Room and Event Space types');
         }
 
-        // Derive capacity from setupConfigs if provided
-        const capacity = dto.setupConfigs && dto.setupConfigs.length > 0
-            ? Math.max(...dto.setupConfigs.map(c => c.maxPeople))
-            : dto.capacity ?? null;
+        // Derive capacity: from setupConfigs for eligible types, from direct fields otherwise
+        let capacity = dto.capacity ?? null;
+        let minCapacity = dto.minCapacity ?? null;
+        if (dto.setupConfigs && dto.setupConfigs.length > 0) {
+            capacity = Math.max(...dto.setupConfigs.map(c => c.maxPeople));
+            minCapacity = Math.min(...dto.setupConfigs.map(c => c.minPeople));
+        }
 
         return this.prisma.service.create({
             data: {
@@ -50,6 +55,7 @@ export class ServicesService {
                 unitNumber: dto.unitNumber,
                 description: dto.description,
                 capacity,
+                minCapacity,
                 floor: dto.floor,
                 profileNameEn: dto.profileNameEn,
                 profileNameAr: dto.profileNameAr,
@@ -57,11 +63,14 @@ export class ServicesService {
                 netSize: dto.netSize,
                 shape: dto.shape,
                 features: dto.features,
+                isPublic: dto.isPublic ?? true,
                 pricing: {
                     create: dto.pricing.map((p) => ({
                         interval: p.interval,
                         pricingMode: p.pricingMode ?? 'PER_BOOKING',
                         price: p.price,
+                        isActive: p.isActive ?? true,
+                        isPublic: p.isPublic ?? true,
                     })),
                 },
                 setupConfigs: dto.setupConfigs && dto.setupConfigs.length > 0 ? {
@@ -99,10 +108,13 @@ export class ServicesService {
             dto.setupConfigs = [];
         }
 
-        // Derive capacity from setupConfigs if provided
-        const capacity = dto.setupConfigs && dto.setupConfigs.length > 0
-            ? Math.max(...dto.setupConfigs.map(c => c.maxPeople))
-            : dto.capacity;
+        // Derive capacity: from setupConfigs for eligible types, from direct fields otherwise
+        let capacity = dto.capacity;
+        let minCapacity = dto.minCapacity;
+        if (dto.setupConfigs && dto.setupConfigs.length > 0) {
+            capacity = Math.max(...dto.setupConfigs.map(c => c.maxPeople));
+            minCapacity = Math.min(...dto.setupConfigs.map(c => c.minPeople));
+        }
 
         // Prepare update data
         const updateData: any = {
@@ -111,7 +123,9 @@ export class ServicesService {
             unitNumber: dto.unitNumber,
             description: dto.description,
             capacity,
+            minCapacity,
             isActive: dto.isActive,
+            isPublic: dto.isPublic,
             floor: dto.floor,
             profileNameEn: dto.profileNameEn,
             profileNameAr: dto.profileNameAr,
@@ -135,6 +149,8 @@ export class ServicesService {
                         interval: p.interval,
                         pricingMode: p.pricingMode ?? 'PER_BOOKING',
                         price: p.price,
+                        isActive: p.isActive ?? true,
+                        isPublic: p.isPublic ?? true,
                     })),
                 }),
             ]);
@@ -174,6 +190,20 @@ export class ServicesService {
 
         if (!service || service.branch.vendorProfileId !== vendorProfile.id) {
             throw new NotFoundException('Service not found');
+        }
+
+        // Prevent deletion if there are active/pending bookings
+        const activeBookingCount = await this.prisma.booking.count({
+            where: {
+                serviceId,
+                status: { in: ['PENDING', 'PENDING_APPROVAL', 'CONFIRMED', 'CHECKED_IN'] },
+            },
+        });
+
+        if (activeBookingCount > 0) {
+            throw new BadRequestException(
+                `Cannot delete this unit — it has ${activeBookingCount} active booking${activeBookingCount > 1 ? 's' : ''}. Cancel or complete them first.`,
+            );
         }
 
         return this.prisma.service.delete({

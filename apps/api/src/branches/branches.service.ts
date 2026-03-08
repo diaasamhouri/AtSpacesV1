@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListBranchesQueryDto, CreateBranchDto, UpdateBranchDto } from './dto';
 import { Prisma } from '@prisma/client';
@@ -71,12 +71,12 @@ export class BranchesService {
             },
           },
           services: {
-            where: { isActive: true },
+            where: { isActive: true, isPublic: true },
             select: {
               type: true,
               pricing: {
-                where: { isActive: true },
-                select: { price: true },
+                where: { isActive: true, isPublic: true },
+                select: { price: true, pricingMode: true, interval: true },
                 orderBy: { price: 'asc' },
                 take: 1,
               },
@@ -89,11 +89,8 @@ export class BranchesService {
 
     let data = branches.map((branch) => {
       const serviceTypes = [...new Set(branch.services.map((s) => s.type))];
-      const allPrices = branch.services
-        .flatMap((s) => s.pricing)
-        .map((p) => p.price.toNumber());
-      const startingPrice =
-        allPrices.length > 0 ? Math.min(...allPrices) : null;
+      const allPricingItems = branch.services.flatMap((s) => s.pricing);
+      const cheapest = allPricingItems.sort((a, b) => a.price.toNumber() - b.price.toNumber())[0];
 
       return {
         id: branch.id,
@@ -104,7 +101,9 @@ export class BranchesService {
         images: branch.images,
         vendor: branch.vendor,
         serviceTypes,
-        startingPrice,
+        startingPrice: cheapest ? cheapest.price.toNumber() : null,
+        startingPricingMode: cheapest?.pricingMode || null,
+        startingPricingInterval: cheapest?.interval || null,
       };
     });
 
@@ -157,7 +156,7 @@ export class BranchesService {
           },
         },
         services: {
-          where: { isActive: true },
+          where: { isActive: true, isPublic: true },
           orderBy: { type: 'asc' },
           select: {
             id: true,
@@ -166,12 +165,18 @@ export class BranchesService {
             unitNumber: true,
             description: true,
             capacity: true,
+            minCapacity: true,
+            floor: true,
+            netSize: true,
+            shape: true,
+            features: true,
             pricing: {
-              where: { isActive: true },
+              where: { isActive: true, isPublic: true },
               orderBy: { price: 'asc' },
               select: {
                 id: true,
                 interval: true,
+                pricingMode: true,
                 price: true,
                 currency: true,
               },
@@ -196,6 +201,7 @@ export class BranchesService {
       ...branch,
       services: branch.services.map((service) => ({
         ...service,
+        netSize: service.netSize ? service.netSize.toNumber() : null,
         pricing: service.pricing.map((p) => ({
           ...p,
           price: p.price.toNumber(),
@@ -225,8 +231,18 @@ export class BranchesService {
             type: true,
             name: true,
             unitNumber: true,
+            description: true,
             capacity: true,
+            minCapacity: true,
             isActive: true,
+            isPublic: true,
+            floor: true,
+            profileNameEn: true,
+            profileNameAr: true,
+            weight: true,
+            netSize: true,
+            shape: true,
+            features: true,
             setupConfigs: {
               select: { setupType: true, minPeople: true, maxPeople: true },
             },
@@ -245,6 +261,7 @@ export class BranchesService {
         ...b,
         services: b.services.map(s => ({
           ...s,
+          netSize: s.netSize ? s.netSize.toNumber() : null,
           pricing: s.pricing.map(p => ({ ...p, price: p.price.toNumber() })),
         })),
       })),
@@ -307,6 +324,24 @@ export class BranchesService {
     const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
     if (!branch || branch.vendorProfileId !== vendorProfile.id) {
       throw new NotFoundException('Branch not found');
+    }
+
+    if (branch.status === 'SUSPENDED') {
+      throw new BadRequestException('Branch is already suspended');
+    }
+
+    // Check for active bookings across all services in this branch
+    const activeBookingCount = await this.prisma.booking.count({
+      where: {
+        branchId,
+        status: { in: ['PENDING', 'PENDING_APPROVAL', 'CONFIRMED', 'CHECKED_IN'] },
+      },
+    });
+
+    if (activeBookingCount > 0) {
+      throw new BadRequestException(
+        `Cannot suspend this branch — it has ${activeBookingCount} active booking${activeBookingCount > 1 ? 's' : ''}. Cancel or complete them first.`,
+      );
     }
 
     // Request suspension instead of immediate delete — admin must approve
