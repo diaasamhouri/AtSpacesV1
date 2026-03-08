@@ -1,22 +1,5 @@
 import type { Invoice, PaginatedResponse, FinancialReport } from "./types";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-
-async function apiFetch<T>(url: string, token: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${url}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...options?.headers,
-    },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || `Request failed: ${res.status}`);
-  }
-  return res.json();
-}
+import { apiFetch } from "./api";
 
 export async function getInvoices(
   token: string,
@@ -25,14 +8,19 @@ export async function getInvoices(
   status?: string,
   search?: string,
 ): Promise<PaginatedResponse<Invoice>> {
-  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-  if (status) params.set("status", status);
-  if (search) params.set("search", search);
-  return apiFetch(`/invoices?${params}`, token);
+  return apiFetch("/invoices", {
+    token,
+    params: {
+      page,
+      limit,
+      status,
+      search,
+    },
+  });
 }
 
 export async function getInvoice(token: string, id: string): Promise<Invoice> {
-  return apiFetch(`/invoices/${id}`, token);
+  return apiFetch(`/invoices/${id}`, { token });
 }
 
 export async function createInvoice(
@@ -46,7 +34,7 @@ export async function createInvoice(
     dueDate?: string;
   },
 ): Promise<Invoice> {
-  return apiFetch("/invoices", token, { method: "POST", body: JSON.stringify(data) });
+  return apiFetch("/invoices", { token, method: "POST", body: data });
 }
 
 export async function updateInvoice(
@@ -60,9 +48,9 @@ export async function updateInvoice(
     dueDate: string;
   }>,
 ): Promise<Invoice> {
-  return apiFetch(`/invoices/${id}`, token, { method: "PATCH", body: JSON.stringify(data) });
+  return apiFetch(`/invoices/${id}`, { token, method: "PATCH", body: data });
 }
 
 export async function getFinancialStats(token: string): Promise<FinancialReport> {
-  return apiFetch("/invoices/stats", token);
+  return apiFetch("/invoices/stats", { token });
 }
