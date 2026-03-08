@@ -374,6 +374,7 @@ model Branch {
   @@index([vendorProfileId])
   @@index([city])
   @@index([status])
+  @@index([vendorProfileId, status])
 }
 
 // ==================== SERVICES & PRICING ====================
@@ -385,8 +386,10 @@ model Service {
   name        String // e.g. "Hot Desk Area A", "Office Room 3"
   unitNumber  String? // e.g. "Room 3", "A-101"
   description String?
-  capacity    Int? // Legacy/fallback capacity; prefer setupConfigs for min/max per setup
+  capacity    Int? // Max capacity (for HOT_DESK/PRIVATE_OFFICE); derived from setupConfigs for MEETING_ROOM/EVENT_SPACE
+  minCapacity Int? // Min capacity (for HOT_DESK/PRIVATE_OFFICE)
   isActive    Boolean     @default(true)
+  isPublic    Boolean     @default(true)
   // Phase 9: Unit detail enhancements
   profileNameEn String?
   profileNameAr String?
@@ -432,6 +435,7 @@ model ServicePricing {
   price       Decimal         @db.Decimal(10, 3) // JOD supports 3 decimal places (fils)
   currency    String          @default("JOD")
   isActive    Boolean         @default(true)
+  isPublic    Boolean         @default(true)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -462,6 +466,7 @@ model Booking {
   accountantApproved   Boolean       @default(false)
   // Financial fields
   pricingInterval      PricingInterval?
+  pricingMode          PricingMode?
   unitPrice            Decimal?      @db.Decimal(10, 3)
   subtotal             Decimal?      @db.Decimal(10, 3)
   discountType         DiscountType  @default(NONE)
@@ -490,6 +495,8 @@ model Booking {
   @@index([status])
   @@index([startTime, endTime])
   @@index([bookingGroupId])
+  @@index([branchId, status, startTime])
+  @@index([status, createdAt])
 }
 
 model Payment {
@@ -509,6 +516,7 @@ model Payment {
 
   @@index([status])
   @@index([transactionId])
+  @@index([status, createdAt])
 }
 
 model PaymentLog {
@@ -557,6 +565,8 @@ model Quotation {
   discountAmount  Decimal?        @db.Decimal(10, 3)
   taxRate         Decimal?        @db.Decimal(5, 2)
   taxAmount       Decimal?        @db.Decimal(10, 3)
+  pricingInterval PricingInterval?
+  pricingMode     PricingMode?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -632,6 +642,7 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
+  @@index([userId, isRead, createdAt])
 }
 
 // ==================== REVIEWS & FAVORITES ====================
