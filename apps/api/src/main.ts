@@ -36,6 +36,11 @@ async function bootstrap() {
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, documentFactory);
 
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret || jwtSecret === 'CHANGE_ME_TO_A_RANDOM_SECRET_IN_PRODUCTION') {
+    console.warn('⚠️  WARNING: JWT_SECRET is not set or is using the default placeholder. Set a real secret before deploying to production.');
+  }
+
   await app.listen(process.env.PORT ?? 3001);
 }
 bootstrap();
