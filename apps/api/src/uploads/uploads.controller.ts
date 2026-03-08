@@ -7,7 +7,9 @@ import {
     Get,
     Param,
     Res,
+    UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
@@ -27,6 +29,7 @@ if (!existsSync(UPLOAD_DIR)) {
 @Controller('uploads')
 export class UploadsController {
     @Post()
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: 'Upload a file (images only)' })
     @ApiConsumes('multipart/form-data')
     @ApiBody({
