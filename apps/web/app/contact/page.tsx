@@ -13,21 +13,23 @@ export default function ContactPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
+    setError(false);
 
     try {
       await apiFetch('/contact', {
         method: 'POST',
         body: formState,
       });
+      setSubmitted(true);
     } catch {
-      // Still show success - message may have been sent
+      setError(true);
     }
 
-    setSubmitted(true);
     setSubmitting(false);
   }
 
@@ -79,6 +81,11 @@ export default function ContactPage() {
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-6">
+                    {error && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-4 text-center">
+                        <p className="text-sm text-red-800 dark:text-red-200 font-medium">Failed to send message. Please try again.</p>
+                      </div>
+                    )}
                     <div>
                       <label htmlFor="name" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Name</label>
                       <input

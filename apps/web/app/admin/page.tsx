@@ -213,7 +213,6 @@ export default function AdminDashboard() {
             { label: "Vendor Management", href: "/admin/vendors", icon: "Building" },
             { label: "Branch Management", href: "/admin/branches", icon: "MapPin" },
             { label: "Invoices", href: "/admin/invoices", icon: "FileText" },
-            { label: "Entities", href: "/admin/entities", icon: "Users" },
             { label: "Approvals", href: "/admin/approvals", icon: "CheckCircle" },
             { label: "Analytics", href: "/admin/analytics", icon: "TrendingUp" },
           ].map((item) => (
