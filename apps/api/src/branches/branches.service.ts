@@ -247,9 +247,8 @@ export class BranchesService {
               select: { setupType: true, minPeople: true, maxPeople: true },
             },
             pricing: {
-              where: { isActive: true },
               orderBy: { price: 'asc' },
-              select: { id: true, interval: true, pricingMode: true, price: true, currency: true },
+              select: { id: true, interval: true, pricingMode: true, price: true, currency: true, isActive: true, isPublic: true },
             },
           }
         }
