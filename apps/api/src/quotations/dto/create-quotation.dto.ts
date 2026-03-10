@@ -7,6 +7,7 @@ import {
   IsEnum,
   IsArray,
   IsInt,
+  IsUUID,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -38,6 +39,24 @@ export class QuotationLineItemDto {
   @IsOptional()
   @IsInt()
   sortOrder?: number;
+}
+
+export class QuotationAddOnDto {
+  @IsUUID()
+  vendorAddOnId: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  quantity?: number = 1;
+
+  @IsOptional()
+  @IsString()
+  serviceTime?: string;
+
+  @IsOptional()
+  @IsString()
+  comments?: string;
 }
 
 export class CreateQuotationDto {
@@ -129,4 +148,9 @@ export class CreateQuotationDto {
   @ValidateNested({ each: true })
   @Type(() => QuotationLineItemDto)
   lineItems?: QuotationLineItemDto[];
+
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => QuotationAddOnDto)
+  addOns?: QuotationAddOnDto[];
 }
