@@ -440,6 +440,8 @@ export interface VendorProfile {
   registeredInCountry: string | null;
   hasTaxExemption: boolean;
   companyDescription: string | null;
+  taxRate?: number | null;
+  taxEnabled?: boolean;
   authorizedSignatories: AuthorizedSignatory[];
   companyContacts: CompanyContact[];
   departmentContacts: DepartmentContact[];
