@@ -33,6 +33,8 @@ export default function QuotationDetailPage() {
     const [editAmount, setEditAmount] = useState("");
     const [editNotes, setEditNotes] = useState("");
     const [editPeople, setEditPeople] = useState(1);
+    const [editPricingInterval, setEditPricingInterval] = useState("");
+    const [editPricingMode, setEditPricingMode] = useState("");
     const [saving, setSaving] = useState(false);
 
     // Confirm dialogs
@@ -67,6 +69,8 @@ export default function QuotationDetailPage() {
         setEditAmount(String(quotation.totalAmount));
         setEditNotes(quotation.notes || "");
         setEditPeople(quotation.numberOfPeople);
+        setEditPricingInterval(quotation.pricingInterval || "");
+        setEditPricingMode(quotation.pricingMode || "");
         setEditing(true);
     };
 
@@ -83,6 +87,8 @@ export default function QuotationDetailPage() {
                 endTime: new Date(editEndTime).toISOString(),
                 totalAmount: Number(editAmount),
                 numberOfPeople: editPeople,
+                pricingInterval: editPricingInterval || undefined,
+                pricingMode: editPricingMode || undefined,
                 notes: editNotes || undefined,
             });
             setQuotation(updated);
@@ -399,6 +405,38 @@ export default function QuotationDetailPage() {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                                    Pricing Interval
+                                </label>
+                                <select
+                                    value={editPricingInterval}
+                                    onChange={(e) => setEditPricingInterval(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                                >
+                                    <option value="">Not set</option>
+                                    <option value="HOURLY">Hourly</option>
+                                    <option value="HALF_DAY">Half Day</option>
+                                    <option value="DAILY">Daily</option>
+                                    <option value="WEEKLY">Weekly</option>
+                                    <option value="MONTHLY">Monthly</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                                    Pricing Mode
+                                </label>
+                                <select
+                                    value={editPricingMode}
+                                    onChange={(e) => setEditPricingMode(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                                >
+                                    <option value="">Not set</option>
+                                    <option value="PER_BOOKING">Per Booking</option>
+                                    <option value="PER_PERSON">Per Person</option>
+                                    <option value="PER_HOUR">Per Hour</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
                                     Total Amount (JOD)
                                 </label>
                                 <input
@@ -419,6 +457,14 @@ export default function QuotationDetailPage() {
                                     {quotation.totalAmount} JOD
                                 </p>
                             </div>
+                            {quotation.pricingInterval && (
+                                <div>
+                                    <p className="text-xs text-slate-500">Pricing</p>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                        {quotation.pricingInterval.replace("_", " ").toLowerCase()}{quotation.pricingMode ? ` (${quotation.pricingMode.replace(/_/g, " ").toLowerCase()})` : ""}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -449,6 +495,37 @@ export default function QuotationDetailPage() {
                                         <td className="px-4 py-2 text-gray-900 dark:text-white text-right">{item.unitPrice.toFixed(3)}</td>
                                         <td className="px-4 py-2 text-gray-900 dark:text-white text-right">{item.quantity}</td>
                                         <td className="px-4 py-2 text-gray-900 dark:text-white text-right">{item.totalPrice.toFixed(3)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Add-Ons */}
+            {quotation.addOns && quotation.addOns.length > 0 && (
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                    <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">
+                        Add-Ons
+                    </h2>
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-slate-50 dark:bg-dark-850 text-left">
+                                    <th className="px-4 py-2 font-medium text-slate-600 dark:text-slate-300">Name</th>
+                                    <th className="px-4 py-2 font-medium text-slate-600 dark:text-slate-300 text-right">Unit Price</th>
+                                    <th className="px-4 py-2 font-medium text-slate-600 dark:text-slate-300 text-right">Qty</th>
+                                    <th className="px-4 py-2 font-medium text-slate-600 dark:text-slate-300 text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {quotation.addOns.map((addOn) => (
+                                    <tr key={addOn.id} className="border-t border-slate-200 dark:border-slate-700">
+                                        <td className="px-4 py-2 text-gray-900 dark:text-white">{addOn.name}</td>
+                                        <td className="px-4 py-2 text-gray-900 dark:text-white text-right">{addOn.unitPrice.toFixed(3)}</td>
+                                        <td className="px-4 py-2 text-gray-900 dark:text-white text-right">{addOn.quantity}</td>
+                                        <td className="px-4 py-2 text-gray-900 dark:text-white text-right">{addOn.totalPrice.toFixed(3)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -605,7 +682,7 @@ export default function QuotationDetailPage() {
                 title="Reject Quotation"
                 message={`Are you sure you want to reject quotation ${quotation.referenceNumber}? This action cannot be undone.`}
                 confirmLabel={actionLoading ? "Rejecting..." : "Reject"}
-                variant="destructive"
+                variant="danger"
             />
 
             <ConfirmDialog
