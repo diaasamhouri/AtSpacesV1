@@ -11,3 +11,4 @@ export { CreateVendorAddOnDto, UpdateVendorAddOnDto } from './create-vendor-addo
 export { CreateCustomerDto } from './create-customer.dto';
 export { ValidatePromoDto } from './validate-promo.dto';
 export { BookingDayDto, BookingDayAddOnDto } from './booking-day.dto';
+export { UpdateVendorBookingDto } from './update-vendor-booking.dto';

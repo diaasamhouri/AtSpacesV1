@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VendorService } from './vendor.service';
 import {
     UpdateVendorProfileDto, VendorReplyDto, CreatePromoCodeDto, UpdatePromoCodeDto,
-    CreateVendorBookingDto, CollectPaymentDto, BulkCollectPaymentDto,
+    CreateVendorBookingDto, UpdateVendorBookingDto, CollectPaymentDto, BulkCollectPaymentDto,
     UpdateSignatoryDto, UpdateCompanyContactDto, UpdateDepartmentContactDto, UpdateBankingInfoDto,
     CreateVendorAddOnDto, UpdateVendorAddOnDto, CreateCustomerDto, ValidatePromoDto,
 } from './dto';
@@ -83,6 +83,12 @@ export class VendorController {
     @ApiOperation({ summary: 'Reply to a customer review' })
     async replyToReview(@Req() req: any, @Param('id') reviewId: string, @Body() dto: VendorReplyDto) {
         return this.vendorService.replyToReview(req.user.id, reviewId, dto.vendorReply);
+    }
+
+    @Delete('reviews/:id/reply')
+    @ApiOperation({ summary: 'Delete vendor reply from a review' })
+    async deleteReviewReply(@Req() req: any, @Param('id') reviewId: string) {
+        return this.vendorService.deleteReviewReply(req.user.id, reviewId);
     }
 
     // ==================== CALENDAR ====================
@@ -175,6 +181,12 @@ export class VendorController {
     @ApiOperation({ summary: 'Create a booking on behalf of a customer' })
     async createBookingForCustomer(@Req() req: any, @Body() dto: CreateVendorBookingDto) {
         return this.vendorService.createBookingForCustomer(req.user.id, dto);
+    }
+
+    @Patch('bookings/:id')
+    @ApiOperation({ summary: 'Edit a booking (PENDING, PENDING_APPROVAL, or CONFIRMED)' })
+    async updateBooking(@Req() req: any, @Param('id') bookingId: string, @Body() dto: UpdateVendorBookingDto) {
+        return this.vendorService.updateVendorBooking(req.user.id, bookingId, dto);
     }
 
     // ==================== PAYMENTS ====================

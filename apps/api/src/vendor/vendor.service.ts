@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { buildPaginatedResponse } from '../common/helpers/paginate';
 import { CreateVendorBookingDto } from './dto/create-vendor-booking.dto';
+import { UpdateVendorBookingDto } from './dto/update-vendor-booking.dto';
 import { CreateVendorAddOnDto, UpdateVendorAddOnDto } from './dto/create-vendor-addon.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { ValidatePromoDto } from './dto/validate-promo.dto';
@@ -1277,6 +1278,266 @@ export class VendorService {
                 tax: totalTax,
                 total: grandTotal,
             },
+        };
+    }
+
+    // ==================== VENDOR BOOKING EDITING ====================
+
+    async updateVendorBooking(vendorUserId: string, bookingId: string, dto: UpdateVendorBookingDto) {
+        // 1. Get vendor profile with tax settings
+        const vp = await this.getApprovedVendorProfile(vendorUserId);
+
+        // 2. Fetch existing booking with relations
+        const booking = await this.prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: {
+                branch: { select: { id: true, name: true, city: true, address: true, vendorProfileId: true } },
+                service: { select: { id: true, type: true, name: true, branchId: true, isActive: true, capacity: true, pricing: { where: { isActive: true } } } },
+                payment: true,
+                addOns: true,
+            },
+        });
+        if (!booking) throw new NotFoundException('Booking not found');
+
+        // 3. Verify vendor owns the booking's branch
+        if (booking.branch.vendorProfileId !== vp.id) {
+            throw new ForbiddenException('This booking does not belong to your branch');
+        }
+
+        // 4. Verify status is editable
+        const editableStatuses = ['PENDING', 'PENDING_APPROVAL', 'CONFIRMED'];
+        if (!editableStatuses.includes(booking.status)) {
+            throw new BadRequestException(`Cannot edit booking with status ${booking.status}. Only PENDING, PENDING_APPROVAL, and CONFIRMED bookings can be edited.`);
+        }
+
+        // 5. Resolve final values (use dto if provided, else keep existing)
+        const finalBranchId = dto.branchId ?? booking.branchId;
+        const finalServiceId = dto.serviceId ?? booking.serviceId;
+        const finalStartTime = dto.startTime ? new Date(dto.startTime) : booking.startTime;
+        const finalEndTime = dto.endTime ? new Date(dto.endTime) : booking.endTime;
+        const finalNumberOfPeople = dto.numberOfPeople ?? booking.numberOfPeople;
+        const finalNotes = dto.notes !== undefined ? dto.notes : booking.notes;
+        const finalRequestedSetup = dto.requestedSetup !== undefined ? (dto.requestedSetup || null) : booking.requestedSetup;
+        const finalPricingInterval = dto.pricingInterval ?? booking.pricingInterval;
+        const finalDiscountType = dto.discountType !== undefined ? dto.discountType : (booking.discountType as string);
+        const finalDiscountValue = dto.discountValue !== undefined ? dto.discountValue : (booking.discountValue?.toNumber() ?? 0);
+        const finalSubjectToTax = dto.subjectToTax ?? (booking.taxRate !== null && booking.taxRate.toNumber() > 0);
+
+        // 6. If branchId changed, verify vendor owns the new branch
+        let finalBranch = booking.branch;
+        if (dto.branchId && dto.branchId !== booking.branchId) {
+            const newBranch = await this.prisma.branch.findUnique({
+                where: { id: dto.branchId },
+                select: { id: true, name: true, city: true, address: true, vendorProfileId: true, status: true },
+            });
+            if (!newBranch || newBranch.vendorProfileId !== vp.id) {
+                throw new ForbiddenException('New branch does not belong to you');
+            }
+            if (newBranch.status !== 'ACTIVE') {
+                throw new BadRequestException('New branch is not currently active');
+            }
+            finalBranch = newBranch as typeof booking.branch;
+        }
+
+        // 7. If serviceId changed, validate new service belongs to the branch and is active
+        let finalService = booking.service;
+        if (dto.serviceId && dto.serviceId !== booking.serviceId) {
+            const newService = await this.prisma.service.findUnique({
+                where: { id: dto.serviceId },
+                select: { id: true, type: true, name: true, branchId: true, isActive: true, capacity: true, pricing: { where: { isActive: true } } },
+            });
+            if (!newService || newService.branchId !== finalBranchId) {
+                throw new BadRequestException('Service not found or does not belong to the selected branch');
+            }
+            if (!newService.isActive) {
+                throw new BadRequestException('Service is not active');
+            }
+            finalService = newService as typeof booking.service;
+        }
+
+        // 8. Resolve pricing: look up ServicePricing for the service + pricingInterval
+        const pricingRecord = finalPricingInterval
+            ? await this.prisma.servicePricing.findFirst({
+                where: { serviceId: finalServiceId, interval: finalPricingInterval, isActive: true },
+            })
+            : null;
+        const unitPrice = pricingRecord ? pricingRecord.price.toNumber() : (booking.unitPrice?.toNumber() ?? 0);
+        const pricingMode = pricingRecord?.pricingMode || booking.pricingMode || 'PER_BOOKING';
+
+        // 9. If startTime/endTime/serviceId changed, check availability EXCLUDING the current booking
+        if (dto.startTime || dto.endTime || dto.serviceId) {
+            const overlappingCount = await this.prisma.booking.count({
+                where: {
+                    serviceId: finalServiceId,
+                    id: { not: bookingId },
+                    status: { in: ['PENDING', 'PENDING_APPROVAL', 'CONFIRMED', 'CHECKED_IN'] },
+                    startTime: { lt: finalEndTime },
+                    endTime: { gt: finalStartTime },
+                },
+            });
+            const effectiveCapacity = finalService.capacity ?? 0;
+            if (effectiveCapacity > 0 && overlappingCount >= effectiveCapacity) {
+                throw new ConflictException('No availability for the selected time slot');
+            }
+        }
+
+        // 10. Recalculate financials
+        const durationHours = Math.max((finalEndTime.getTime() - finalStartTime.getTime()) / (1000 * 60 * 60), 0);
+        let subtotal = calculateSubtotal(unitPrice, pricingMode, finalNumberOfPeople, durationHours);
+
+        // Add add-on totals
+        let addOnTotal = 0;
+        if (dto.addOns !== undefined) {
+            // Use the new add-ons from the DTO
+            for (const addOn of dto.addOns || []) {
+                const vendorAddOn = await this.prisma.vendorAddOn.findUnique({ where: { id: addOn.vendorAddOnId } });
+                if (!vendorAddOn || vendorAddOn.vendorProfileId !== vp.id) {
+                    throw new BadRequestException(`Add-on ${addOn.vendorAddOnId} not found`);
+                }
+                addOnTotal += vendorAddOn.unitPrice.toNumber() * addOn.quantity;
+            }
+        } else {
+            // Keep existing add-on totals
+            for (const existingAddOn of booking.addOns) {
+                addOnTotal += existingAddOn.totalPrice.toNumber();
+            }
+        }
+        subtotal += addOnTotal;
+
+        // Recalculate discount
+        let discountAmount = 0;
+        if (finalDiscountType === 'PERCENTAGE' && finalDiscountValue > 0) {
+            discountAmount = subtotal * (finalDiscountValue / 100);
+        } else if (finalDiscountType === 'FIXED' && finalDiscountValue > 0) {
+            discountAmount = Math.min(finalDiscountValue, subtotal);
+        } else if (finalDiscountType === 'PROMO_CODE' && finalDiscountValue > 0) {
+            discountAmount = subtotal * (finalDiscountValue / 100);
+        }
+
+        const afterDiscount = Math.max(0, subtotal - discountAmount);
+        const taxRate = finalSubjectToTax ? vp.taxRate.toNumber() : 0;
+        const taxAmount = finalSubjectToTax ? afterDiscount * (taxRate / 100) : 0;
+        const totalPrice = afterDiscount + taxAmount;
+
+        // 11. Update the booking record
+        const updatedBooking = await this.prisma.booking.update({
+            where: { id: bookingId },
+            data: {
+                branchId: finalBranchId,
+                serviceId: finalServiceId,
+                startTime: finalStartTime,
+                endTime: finalEndTime,
+                numberOfPeople: finalNumberOfPeople,
+                notes: finalNotes,
+                requestedSetup: finalRequestedSetup as any,
+                pricingInterval: finalPricingInterval,
+                pricingMode: pricingMode as any,
+                unitPrice,
+                subtotal,
+                discountType: finalDiscountType as any,
+                discountValue: finalDiscountValue || null,
+                discountAmount: discountAmount || null,
+                taxRate: finalSubjectToTax ? taxRate : null,
+                taxAmount: taxAmount || null,
+                totalPrice,
+            },
+            include: {
+                branch: { select: { id: true, name: true, city: true, address: true } },
+                service: { select: { id: true, type: true, name: true } },
+                payment: true,
+                addOns: true,
+                user: { select: { id: true, name: true, email: true } },
+            },
+        });
+
+        // 12. If dto.addOns provided: deleteMany existing, create new ones
+        if (dto.addOns !== undefined) {
+            await this.prisma.bookingAddOn.deleteMany({ where: { bookingId } });
+            for (const addOn of dto.addOns || []) {
+                const vendorAddOn = await this.prisma.vendorAddOn.findUnique({ where: { id: addOn.vendorAddOnId } });
+                if (vendorAddOn) {
+                    await this.prisma.bookingAddOn.create({
+                        data: {
+                            bookingId,
+                            vendorAddOnId: addOn.vendorAddOnId,
+                            name: vendorAddOn.name,
+                            unitPrice: vendorAddOn.unitPrice,
+                            quantity: addOn.quantity,
+                            totalPrice: vendorAddOn.unitPrice.toNumber() * addOn.quantity,
+                            serviceTime: addOn.serviceTime,
+                            comments: addOn.comments,
+                        },
+                    });
+                }
+            }
+        }
+
+        // 13. If payment exists and status is PENDING, update payment amount
+        if (updatedBooking.payment && updatedBooking.payment.status === 'PENDING') {
+            await this.prisma.payment.update({
+                where: { id: updatedBooking.payment.id },
+                data: { amount: totalPrice },
+            });
+        }
+
+        // 14. Return serialized booking with Decimal fields converted to numbers
+        const refreshedBooking = dto.addOns !== undefined
+            ? await this.prisma.booking.findUnique({
+                where: { id: bookingId },
+                include: {
+                    branch: { select: { id: true, name: true, city: true, address: true } },
+                    service: { select: { id: true, type: true, name: true } },
+                    payment: true,
+                    addOns: true,
+                    user: { select: { id: true, name: true, email: true } },
+                },
+            })
+            : updatedBooking;
+
+        const b = refreshedBooking!;
+        return {
+            id: b.id,
+            userId: b.userId,
+            branchId: b.branchId,
+            serviceId: b.serviceId,
+            status: b.status,
+            startTime: b.startTime,
+            endTime: b.endTime,
+            numberOfPeople: b.numberOfPeople,
+            totalPrice: b.totalPrice.toNumber(),
+            currency: b.currency,
+            notes: b.notes,
+            requestedSetup: b.requestedSetup,
+            pricingInterval: b.pricingInterval,
+            pricingMode: b.pricingMode,
+            unitPrice: b.unitPrice?.toNumber() ?? null,
+            subtotal: b.subtotal?.toNumber() ?? null,
+            discountType: b.discountType,
+            discountValue: b.discountValue?.toNumber() ?? null,
+            discountAmount: b.discountAmount?.toNumber() ?? null,
+            taxRate: b.taxRate?.toNumber() ?? null,
+            taxAmount: b.taxAmount?.toNumber() ?? null,
+            createdAt: b.createdAt,
+            updatedAt: b.updatedAt,
+            branch: b.branch,
+            service: b.service,
+            user: b.user,
+            payment: b.payment ? {
+                id: b.payment.id,
+                method: b.payment.method,
+                status: b.payment.status,
+                amount: b.payment.amount.toNumber(),
+            } : null,
+            addOns: b.addOns.map(a => ({
+                id: a.id,
+                vendorAddOnId: a.vendorAddOnId,
+                name: a.name,
+                unitPrice: a.unitPrice.toNumber(),
+                quantity: a.quantity,
+                totalPrice: a.totalPrice.toNumber(),
+                serviceTime: a.serviceTime,
+                comments: a.comments,
+            })),
         };
     }
 }
