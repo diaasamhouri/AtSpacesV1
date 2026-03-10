@@ -16,6 +16,7 @@ const quotationInclude = {
   service: { select: { name: true, type: true } },
   createdBy: { select: { name: true } },
   lineItems: { orderBy: { sortOrder: 'asc' as const } },
+  addOns: true,
 };
 
 @Injectable()
@@ -68,6 +69,38 @@ export class QuotationsService {
       },
       include: quotationInclude,
     });
+
+    // Create add-ons if provided
+    if (dto.addOns?.length) {
+      for (const addOn of dto.addOns) {
+        const vendorAddOn = await this.prisma.vendorAddOn.findUnique({
+          where: { id: addOn.vendorAddOnId },
+        });
+        if (!vendorAddOn) {
+          throw new NotFoundException(`VendorAddOn ${addOn.vendorAddOnId} not found`);
+        }
+        const quantity = addOn.quantity ?? 1;
+        await this.prisma.quotationAddOn.create({
+          data: {
+            quotationId: quotation.id,
+            vendorAddOnId: vendorAddOn.id,
+            name: vendorAddOn.name,
+            unitPrice: vendorAddOn.unitPrice,
+            quantity,
+            totalPrice: vendorAddOn.unitPrice.toNumber() * quantity,
+            serviceTime: addOn.serviceTime,
+            comments: addOn.comments,
+          },
+        });
+      }
+
+      // Re-fetch to include the newly created add-ons
+      const refreshed = await this.prisma.quotation.findUnique({
+        where: { id: quotation.id },
+        include: quotationInclude,
+      });
+      return this.serializeQuotation(refreshed);
+    }
 
     return this.serializeQuotation(quotation);
   }
@@ -194,7 +227,7 @@ export class QuotationsService {
       throw new BadRequestException('Use the dedicated /accept, /reject, or /send endpoints to change quotation status');
     }
 
-    const { lineItems, ...rest } = dto;
+    const { lineItems, addOns, ...rest } = dto;
     const data: any = { ...rest };
 
     if (dto.startTime) {
@@ -204,8 +237,9 @@ export class QuotationsService {
       data.endTime = new Date(dto.endTime);
     }
 
-    // Remove lineItems from data since we handle them separately
+    // Remove lineItems and addOns from data since we handle them separately
     delete data.lineItems;
+    delete data.addOns;
 
     if (lineItems) {
       // Delete existing line items and recreate
@@ -222,6 +256,37 @@ export class QuotationsService {
           sortOrder: item.sortOrder ?? index,
         })),
       };
+    }
+
+    // Handle add-ons: delete and recreate if provided
+    if (addOns !== undefined) {
+      await this.prisma.quotationAddOn.deleteMany({
+        where: { quotationId: id },
+      });
+
+      if (addOns.length) {
+        for (const addOn of addOns) {
+          const vendorAddOn = await this.prisma.vendorAddOn.findUnique({
+            where: { id: addOn.vendorAddOnId },
+          });
+          if (!vendorAddOn) {
+            throw new NotFoundException(`VendorAddOn ${addOn.vendorAddOnId} not found`);
+          }
+          const quantity = addOn.quantity ?? 1;
+          await this.prisma.quotationAddOn.create({
+            data: {
+              quotationId: id,
+              vendorAddOnId: vendorAddOn.id,
+              name: vendorAddOn.name,
+              unitPrice: vendorAddOn.unitPrice,
+              quantity,
+              totalPrice: vendorAddOn.unitPrice.toNumber() * quantity,
+              serviceTime: addOn.serviceTime,
+              comments: addOn.comments,
+            },
+          });
+        }
+      }
     }
 
     const quotation = await this.prisma.quotation.update({
@@ -522,6 +587,16 @@ export class QuotationsService {
         quantity: item.quantity,
         totalPrice: item.totalPrice.toNumber(),
         sortOrder: item.sortOrder,
+      })) ?? [],
+      addOns: quotation.addOns?.map((a: any) => ({
+        id: a.id,
+        vendorAddOnId: a.vendorAddOnId,
+        name: a.name,
+        unitPrice: a.unitPrice.toNumber(),
+        quantity: a.quantity,
+        totalPrice: a.totalPrice.toNumber(),
+        serviceTime: a.serviceTime ?? null,
+        comments: a.comments ?? null,
       })) ?? [],
     };
   }
