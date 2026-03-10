@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -54,15 +54,30 @@ describe('VendorService', () => {
     branch: {
       count: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
     },
     service: {
       count: jest.fn(),
+      findUnique: jest.fn(),
     },
     booking: {
       count: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
     payment: {
       aggregate: jest.fn(),
+      update: jest.fn(),
+    },
+    servicePricing: {
+      findFirst: jest.fn(),
+    },
+    bookingAddOn: {
+      deleteMany: jest.fn(),
+      create: jest.fn(),
+    },
+    vendorAddOn: {
+      findUnique: jest.fn(),
     },
     review: {
       findUnique: jest.fn(),
@@ -246,6 +261,12 @@ describe('VendorService', () => {
           registeredInCountry: true,
           hasTaxExemption: true,
           companyDescription: true,
+          companyContacts: true,
+          departmentContacts: true,
+          bankingInfo: true,
+          authorizedSignatories: true,
+          verifiedAt: true,
+          verificationRequestedAt: true,
         },
       });
     });
@@ -593,6 +614,274 @@ describe('VendorService', () => {
       await expect(
         service.deletePromoCode(mockUserId, 'non-existent'),
       ).rejects.toThrow('Promo code not found');
+    });
+  });
+
+  // ==================== updateVendorBooking ====================
+
+  describe('updateVendorBooking', () => {
+    const mockBookingId = 'booking-1';
+
+    const baseMockBooking = {
+      id: mockBookingId,
+      userId: 'customer-1',
+      branchId: 'branch-1',
+      serviceId: 'service-1',
+      status: 'CONFIRMED',
+      startTime: new Date('2026-03-15T09:00:00Z'),
+      endTime: new Date('2026-03-15T11:00:00Z'),
+      numberOfPeople: 2,
+      totalPrice: new Decimal(50),
+      currency: 'JOD',
+      notes: null,
+      requestedSetup: null,
+      pricingInterval: 'HOURLY',
+      pricingMode: 'PER_BOOKING',
+      unitPrice: new Decimal(25),
+      subtotal: new Decimal(25),
+      discountType: null,
+      discountValue: null,
+      discountAmount: null,
+      taxRate: new Decimal(16),
+      taxAmount: new Decimal(4),
+      promoCodeId: null,
+      createdAt: new Date('2026-03-10'),
+      updatedAt: new Date('2026-03-10'),
+      branch: {
+        id: 'branch-1',
+        name: 'Downtown Branch',
+        city: 'AMMAN',
+        address: '123 Main St',
+        vendorProfileId: mockVendorProfileId,
+      },
+      service: {
+        id: 'service-1',
+        type: 'HOT_DESK',
+        name: 'Hot Desk A',
+        branchId: 'branch-1',
+        isActive: true,
+        capacity: 10,
+        pricing: [{ id: 'sp-1', interval: 'HOURLY', price: new Decimal(25), pricingMode: 'PER_BOOKING', isActive: true }],
+      },
+      payment: null,
+      addOns: [],
+      user: { id: 'customer-1', name: 'John Doe', email: 'john@example.com' },
+    };
+
+    /**
+     * Helper to set up standard mocks for a successful updateVendorBooking call.
+     * Returns the booking mock so individual tests can override fields before calling.
+     */
+    function setupUpdateMocks(bookingOverrides: Record<string, any> = {}) {
+      const booking = { ...baseMockBooking, ...bookingOverrides };
+      mockPrismaService.vendorProfile.findUnique.mockResolvedValue(approvedVendorProfile);
+      mockPrismaService.booking.findUnique.mockResolvedValue(booking);
+      mockPrismaService.servicePricing.findFirst.mockResolvedValue({
+        id: 'sp-1',
+        interval: 'HOURLY',
+        price: new Decimal(25),
+        pricingMode: 'PER_BOOKING',
+        isActive: true,
+      });
+      mockPrismaService.booking.count.mockResolvedValue(0);
+      // booking.update returns the updated booking (with user, payment, addOns)
+      mockPrismaService.booking.update.mockResolvedValue(booking);
+      return booking;
+    }
+
+    it('should update booking time and recalculate price', async () => {
+      const booking = setupUpdateMocks();
+
+      // New times: 3 hours instead of 2
+      const dto = {
+        startTime: '2026-03-15T08:00:00Z',
+        endTime: '2026-03-15T11:00:00Z',
+      };
+
+      const result = await service.updateVendorBooking(mockUserId, mockBookingId, dto);
+
+      // Verify booking.update was called with recalculated times
+      expect(mockPrismaService.booking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: mockBookingId },
+          data: expect.objectContaining({
+            startTime: new Date('2026-03-15T08:00:00Z'),
+            endTime: new Date('2026-03-15T11:00:00Z'),
+            unitPrice: 25,
+          }),
+        }),
+      );
+
+      // Verify availability check was triggered (because startTime changed)
+      expect(mockPrismaService.booking.count).toHaveBeenCalled();
+    });
+
+    it('should reject edit for CHECKED_IN status', async () => {
+      setupUpdateMocks({ status: 'CHECKED_IN' });
+
+      const dto = { notes: 'Updated note' };
+
+      await expect(
+        service.updateVendorBooking(mockUserId, mockBookingId, dto),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.updateVendorBooking(mockUserId, mockBookingId, dto),
+      ).rejects.toThrow('Cannot edit booking with status CHECKED_IN');
+    });
+
+    it('should reject edit when vendor does not own the booking', async () => {
+      setupUpdateMocks({
+        branch: {
+          ...baseMockBooking.branch,
+          vendorProfileId: 'other-vendor-profile-id',
+        },
+      });
+
+      const dto = { notes: 'Updated note' };
+
+      await expect(
+        service.updateVendorBooking(mockUserId, mockBookingId, dto),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.updateVendorBooking(mockUserId, mockBookingId, dto),
+      ).rejects.toThrow('This booking does not belong to your branch');
+    });
+
+    it('should update add-ons (delete old, create new)', async () => {
+      const booking = setupUpdateMocks({
+        addOns: [
+          { id: 'addon-old-1', vendorAddOnId: 'va-1', name: 'Coffee', unitPrice: new Decimal(3), quantity: 2, totalPrice: new Decimal(6), serviceTime: null, comments: null },
+        ],
+      });
+
+      const vendorAddOn = {
+        id: 'va-2',
+        name: 'Projector',
+        unitPrice: new Decimal(10),
+        vendorProfileId: mockVendorProfileId,
+      };
+      mockPrismaService.vendorAddOn.findUnique.mockResolvedValue(vendorAddOn);
+      mockPrismaService.bookingAddOn.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.bookingAddOn.create.mockResolvedValue({});
+
+      const dto = {
+        addOns: [
+          { vendorAddOnId: 'va-2', quantity: 3 },
+        ],
+      };
+
+      await service.updateVendorBooking(mockUserId, mockBookingId, dto);
+
+      // Verify old add-ons were deleted
+      expect(mockPrismaService.bookingAddOn.deleteMany).toHaveBeenCalledWith({
+        where: { bookingId: mockBookingId },
+      });
+
+      // Verify new add-on was created
+      expect(mockPrismaService.bookingAddOn.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          bookingId: mockBookingId,
+          vendorAddOnId: 'va-2',
+          name: 'Projector',
+          quantity: 3,
+          totalPrice: 30,
+        }),
+      });
+    });
+
+    it('should recalculate with PER_PERSON mode when numberOfPeople changes', async () => {
+      setupUpdateMocks();
+
+      // Override servicePricing to return PER_PERSON mode
+      mockPrismaService.servicePricing.findFirst.mockResolvedValue({
+        id: 'sp-1',
+        interval: 'HOURLY',
+        price: new Decimal(15),
+        pricingMode: 'PER_PERSON',
+        isActive: true,
+      });
+
+      const dto = {
+        numberOfPeople: 4,
+      };
+
+      await service.updateVendorBooking(mockUserId, mockBookingId, dto);
+
+      // PER_PERSON: subtotal = unitPrice * numberOfPeople = 15 * 4 = 60
+      // tax = 60 * 16/100 = 9.6
+      // total = 60 + 9.6 = 69.6
+      expect(mockPrismaService.booking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            unitPrice: 15,
+            subtotal: 60,
+            totalPrice: 69.6,
+          }),
+        }),
+      );
+    });
+
+    it('should check availability excluding current booking', async () => {
+      setupUpdateMocks();
+
+      const dto = {
+        startTime: '2026-03-15T10:00:00Z',
+        endTime: '2026-03-15T12:00:00Z',
+      };
+
+      await service.updateVendorBooking(mockUserId, mockBookingId, dto);
+
+      // Verify the availability check excludes the current booking by id
+      expect(mockPrismaService.booking.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            serviceId: 'service-1',
+            id: { not: mockBookingId },
+            status: { in: ['PENDING', 'PENDING_APPROVAL', 'CONFIRMED', 'CHECKED_IN'] },
+          }),
+        }),
+      );
+    });
+
+    it('should update payment amount when total changes', async () => {
+      const paymentData = {
+        id: 'payment-1',
+        method: 'CASH',
+        status: 'PENDING',
+        amount: new Decimal(50),
+      };
+
+      // The booking.update mock needs to return a booking with payment included
+      const bookingWithPayment = {
+        ...baseMockBooking,
+        payment: paymentData,
+      };
+      mockPrismaService.vendorProfile.findUnique.mockResolvedValue(approvedVendorProfile);
+      mockPrismaService.booking.findUnique.mockResolvedValue(bookingWithPayment);
+      mockPrismaService.servicePricing.findFirst.mockResolvedValue({
+        id: 'sp-1',
+        interval: 'HOURLY',
+        price: new Decimal(25),
+        pricingMode: 'PER_BOOKING',
+        isActive: true,
+      });
+      mockPrismaService.booking.count.mockResolvedValue(0);
+      // booking.update returns the updated booking with payment still PENDING
+      mockPrismaService.booking.update.mockResolvedValue(bookingWithPayment);
+      mockPrismaService.payment.update.mockResolvedValue({});
+
+      const dto = {
+        startTime: '2026-03-15T08:00:00Z',
+        endTime: '2026-03-15T11:00:00Z',
+      };
+
+      await service.updateVendorBooking(mockUserId, mockBookingId, dto);
+
+      // Verify payment.update was called because payment.status is PENDING
+      expect(mockPrismaService.payment.update).toHaveBeenCalledWith({
+        where: { id: 'payment-1' },
+        data: { amount: expect.any(Number) },
+      });
     });
   });
 });
