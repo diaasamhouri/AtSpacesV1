@@ -571,6 +571,7 @@ model Quotation {
   updatedAt       DateTime        @updatedAt
 
   lineItems       QuotationLineItem[]
+  addOns          QuotationAddOn[]
 
   @@index([customerId])
   @@index([branchId])
@@ -834,6 +835,7 @@ model VendorAddOn {
 
   vendorProfile   VendorProfile @relation(fields: [vendorProfileId], references: [id], onDelete: Cascade)
   bookingAddOns   BookingAddOn[]
+  quotationAddOns QuotationAddOn[]
 
   @@index([vendorProfileId])
 }
@@ -867,6 +869,24 @@ model QuotationLineItem {
   createdAt   DateTime  @default(now())
 
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId])
+}
+
+model QuotationAddOn {
+  id            String       @id @default(uuid())
+  quotationId   String
+  vendorAddOnId String?
+  name          String
+  unitPrice     Decimal      @db.Decimal(10, 3)
+  quantity      Int          @default(1)
+  totalPrice    Decimal      @db.Decimal(10, 3)
+  serviceTime   String?
+  comments      String?
+  createdAt     DateTime     @default(now())
+
+  quotation     Quotation    @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  vendorAddOn   VendorAddOn? @relation(fields: [vendorAddOnId], references: [id], onDelete: SetNull)
 
   @@index([quotationId])
 }
