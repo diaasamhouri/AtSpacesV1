@@ -510,6 +510,67 @@ export class QuotationsService {
           yPos += 16;
         }
 
+        // Render add-on rows in the same table after line items
+        if (quotation.addOns && quotation.addOns.length > 0) {
+          for (const addOn of quotation.addOns) {
+            yPos += 4;
+            if (yPos > 700) {
+              doc.addPage();
+              yPos = 50;
+            }
+            const addOnUnitPrice = addOn.unitPrice.toNumber().toFixed(3);
+            const addOnTotalPrice = addOn.totalPrice.toNumber().toFixed(3);
+
+            doc.text(addOn.name, col1, yPos, { width: 240 });
+            doc.text(`JOD ${addOnUnitPrice}`, col2, yPos, { width: 70, align: 'right' });
+            doc.text(String(addOn.quantity), col3, yPos, { width: 40, align: 'right' });
+            doc.text(`JOD ${addOnTotalPrice}`, col4, yPos, { width: 80, align: 'right' });
+
+            yPos += 16;
+          }
+        }
+
+        doc.moveTo(col1, yPos).lineTo(510, yPos).strokeColor('#ccc').stroke();
+        doc.y = yPos + 10;
+        doc.moveDown(0.5);
+      } else if (quotation.addOns && quotation.addOns.length > 0) {
+        // Render add-ons table even when there are no line items
+        doc.fillColor('#000').fontSize(12).text('Add-Ons', { underline: true });
+        doc.moveDown(0.5);
+
+        const tableTop = doc.y;
+        const col1 = 50;
+        const col2 = 300;
+        const col3 = 380;
+        const col4 = 430;
+
+        doc.fontSize(9).fillColor('#000');
+        doc.text('Description', col1, tableTop, { width: 240 });
+        doc.text('Unit Price', col2, tableTop, { width: 70, align: 'right' });
+        doc.text('Qty', col3, tableTop, { width: 40, align: 'right' });
+        doc.text('Total', col4, tableTop, { width: 80, align: 'right' });
+
+        doc.moveTo(col1, tableTop + 14).lineTo(510, tableTop + 14).strokeColor('#ccc').stroke();
+
+        let yPos = tableTop + 20;
+        doc.fontSize(9).fillColor('#444');
+
+        for (const addOn of quotation.addOns) {
+          if (yPos > 700) {
+            doc.addPage();
+            yPos = 50;
+          }
+          const addOnUnitPrice = addOn.unitPrice.toNumber().toFixed(3);
+          const addOnTotalPrice = addOn.totalPrice.toNumber().toFixed(3);
+
+          doc.text(addOn.name, col1, yPos, { width: 240 });
+          doc.text(`JOD ${addOnUnitPrice}`, col2, yPos, { width: 70, align: 'right' });
+          doc.text(String(addOn.quantity), col3, yPos, { width: 40, align: 'right' });
+          doc.text(`JOD ${addOnTotalPrice}`, col4, yPos, { width: 80, align: 'right' });
+
+          yPos += 16;
+        }
+
         doc.moveTo(col1, yPos).lineTo(510, yPos).strokeColor('#ccc').stroke();
         doc.y = yPos + 10;
         doc.moveDown(0.5);
