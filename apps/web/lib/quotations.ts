@@ -45,6 +45,7 @@ export async function createQuotation(
     pricingInterval?: string;
     pricingMode?: string;
     lineItems?: { description: string; unitPrice: number; quantity: number; totalPrice: number; sortOrder?: number }[];
+    addOns?: { vendorAddOnId: string; quantity: number; serviceTime?: string; comments?: string }[];
   },
 ): Promise<Quotation> {
   return apiFetch("/quotations", { token, method: "POST", body: data });
@@ -69,6 +70,7 @@ export async function updateQuotation(
     pricingInterval: string;
     pricingMode: string;
     lineItems: { description: string; unitPrice: number; quantity: number; totalPrice: number; sortOrder?: number }[];
+    addOns: { vendorAddOnId: string; quantity: number; serviceTime?: string; comments?: string }[];
   }>,
 ): Promise<Quotation> {
   return apiFetch(`/quotations/${id}`, { token, method: "PATCH", body: data });

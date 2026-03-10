@@ -515,6 +515,17 @@ export interface QuotationLineItem {
   sortOrder: number;
 }
 
+export interface QuotationAddOnItem {
+  id: string;
+  vendorAddOnId: string | null;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  totalPrice: number;
+  serviceTime: string | null;
+  comments: string | null;
+}
+
 export interface Review {
   id: string;
   rating: number;
@@ -700,6 +711,7 @@ export interface Quotation {
   pricingInterval?: PricingInterval | null;
   pricingMode?: PricingMode | null;
   lineItems?: QuotationLineItem[];
+  addOns?: QuotationAddOnItem[];
   createdAt: string;
   updatedAt: string;
 }
