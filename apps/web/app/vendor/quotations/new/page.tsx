@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../../lib/auth-context";
 import { useToast } from "../../../components/ui/toast-provider";
 import { createQuotation } from "../../../../lib/quotations";
-import { getVendorBranches, searchVendorCustomers } from "../../../../lib/vendor";
-import type { VendorBranchDetail, ServiceItem, CustomerSearchResult } from "../../../../lib/types";
+import { getVendorBranches, searchVendorCustomers, getVendorAddOns } from "../../../../lib/vendor";
+import type { VendorBranchDetail, ServiceItem, CustomerSearchResult, VendorAddOn } from "../../../../lib/types";
 
 interface DateEntry {
     date: string;
@@ -82,6 +82,10 @@ export default function NewQuotationPage() {
         }];
     });
 
+    // Vendor add-ons
+    const [vendorAddOns, setVendorAddOns] = useState<VendorAddOn[]>([]);
+    const [selectedAddOns, setSelectedAddOns] = useState<{ vendorAddOnId: string; quantity: number; serviceTime?: string; comments?: string }[]>([]);
+
     // Pricing type for auto-calculation
     const [pricingInterval, setPricingInterval] = useState("");
 
@@ -150,7 +154,17 @@ export default function NewQuotationPage() {
     }, [selectedService, pricingInterval, pricingOptions, dateEntries]);
 
     const [totalAmountOverride, setTotalAmountOverride] = useState("");
-    const effectiveTotal = totalAmountOverride !== "" ? Number(totalAmountOverride) : (calculatedTotal?.total ?? 0);
+
+    // Calculate add-on total
+    const addOnsTotal = useMemo(() => {
+        return selectedAddOns.reduce((sum, s) => {
+            const addOn = vendorAddOns.find(a => a.id === s.vendorAddOnId);
+            return sum + (addOn?.unitPrice ?? 0) * s.quantity;
+        }, 0);
+    }, [selectedAddOns, vendorAddOns]);
+
+    const baseTotal = totalAmountOverride !== "" ? Number(totalAmountOverride) : (calculatedTotal?.total ?? 0);
+    const effectiveTotal = baseTotal + addOnsTotal;
 
     // Load branches on mount
     useEffect(() => {
@@ -163,6 +177,7 @@ export default function NewQuotationPage() {
             })
             .catch(() => setBranches([]))
             .finally(() => setLoading(false));
+        getVendorAddOns(token).then(setVendorAddOns).catch(() => {});
     }, [token]);
 
     // Filter services when branch changes
@@ -312,6 +327,7 @@ export default function NewQuotationPage() {
 
         setSubmitting(true);
         try {
+            const selectedPricing = pricingOptions.find((p) => p.interval === pricingInterval);
             await createQuotation(token!, {
                 customerId,
                 branchId,
@@ -322,7 +338,10 @@ export default function NewQuotationPage() {
                 totalAmount: effectiveTotal,
                 notes: notes || undefined,
                 subtotal: effectiveTotal,
+                pricingInterval: pricingInterval || undefined,
+                pricingMode: selectedPricing?.pricingMode || undefined,
                 lineItems: dateEntries.length > 1 ? lineItems : undefined,
+                addOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
             });
             toast("Quotation created successfully.", "success");
             router.push("/vendor/quotations");
@@ -573,6 +592,71 @@ export default function NewQuotationPage() {
                     </div>
                 </div>
 
+                {/* Add-Ons Section */}
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800 space-y-4">
+                    <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Add-Ons</h2>
+                    {vendorAddOns.filter(a => a.isActive).length === 0 ? (
+                        <p className="text-slate-500 text-sm">No add-ons available. Create add-ons in the Add-Ons page first.</p>
+                    ) : (
+                        <>
+                            {selectedAddOns.map((selected, idx) => {
+                                const addOn = vendorAddOns.find(a => a.id === selected.vendorAddOnId);
+                                return (
+                                    <div key={idx} className="flex items-center gap-3 mb-3">
+                                        <select
+                                            className="bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 flex-1 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 transition-colors"
+                                            value={selected.vendorAddOnId}
+                                            onChange={e => {
+                                                const updated = [...selectedAddOns];
+                                                updated[idx] = { ...updated[idx]!, vendorAddOnId: e.target.value };
+                                                setSelectedAddOns(updated);
+                                            }}
+                                        >
+                                            {vendorAddOns.filter(a => a.isActive).map(a => (
+                                                <option key={a.id} value={a.id}>{a.name} — JOD {a.unitPrice.toFixed(3)}</option>
+                                            ))}
+                                        </select>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            className="bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 w-20 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 transition-colors"
+                                            value={selected.quantity}
+                                            onChange={e => {
+                                                const updated = [...selectedAddOns];
+                                                updated[idx] = { ...updated[idx]!, quantity: Math.max(1, parseInt(e.target.value) || 1) };
+                                                setSelectedAddOns(updated);
+                                            }}
+                                            placeholder="Qty"
+                                        />
+                                        <span className="text-sm text-slate-600 dark:text-slate-300 w-28 text-right">
+                                            JOD {((addOn?.unitPrice ?? 0) * selected.quantity).toFixed(3)}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="text-red-500 hover:text-red-700 text-sm font-medium"
+                                            onClick={() => setSelectedAddOns(selectedAddOns.filter((_, i) => i !== idx))}
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                            <button
+                                type="button"
+                                className="text-brand-500 hover:text-brand-600 text-sm font-medium"
+                                onClick={() => {
+                                    const firstActive = vendorAddOns.find(a => a.isActive);
+                                    if (firstActive) {
+                                        setSelectedAddOns([...selectedAddOns, { vendorAddOnId: firstActive.id, quantity: 1 }]);
+                                    }
+                                }}
+                            >
+                                + Add an add-on
+                            </button>
+                        </>
+                    )}
+                </div>
+
                 {/* Pricing & Total */}
                 <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800 space-y-6">
                     <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Pricing</h2>
@@ -658,6 +742,26 @@ export default function NewQuotationPage() {
                                 <div className="flex justify-between text-sm font-bold border-t border-slate-200 dark:border-slate-700 pt-1.5">
                                     <span className="text-gray-900 dark:text-white">Total</span>
                                     <span className="text-brand-400">{calculatedTotal.total.toFixed(2)} JOD</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Add-ons total summary */}
+                    {addOnsTotal > 0 && (
+                        <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+                            <div className="space-y-1.5">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600 dark:text-slate-300">Service subtotal</span>
+                                    <span className="font-medium text-gray-900 dark:text-white">{baseTotal.toFixed(2)} JOD</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600 dark:text-slate-300">Add-ons total</span>
+                                    <span className="font-medium text-gray-900 dark:text-white">{addOnsTotal.toFixed(3)} JOD</span>
+                                </div>
+                                <div className="flex justify-between text-sm font-bold border-t border-slate-200 dark:border-slate-700 pt-1.5">
+                                    <span className="text-gray-900 dark:text-white">Grand Total</span>
+                                    <span className="text-brand-400">{effectiveTotal.toFixed(2)} JOD</span>
                                 </div>
                             </div>
                         </div>
