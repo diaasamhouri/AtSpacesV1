@@ -6,7 +6,7 @@ import { useAuth } from "../../../../lib/auth-context";
 import { useToast } from "../../../components/ui/toast-provider";
 import {
     getVendorBranches, searchVendorCustomers, createVendorBooking,
-    getVendorAddOns, validatePromoCode,
+    getVendorAddOns, validatePromoCode, getVendorProfile,
 } from "../../../../lib/vendor";
 import { createQuotation } from "../../../../lib/quotations";
 import { CreateCustomerModal } from "../../../components/create-customer-modal";
@@ -121,6 +121,7 @@ export default function CreateVendorBookingPage() {
     });
 
     // Tax & Discount
+    const [vendorTaxRate, setVendorTaxRate] = useState<number>(16);
     const [subjectToTax, setSubjectToTax] = useState(true);
     const [discountType, setDiscountType] = useState<string>("NONE");
     const [discountValue, setDiscountValue] = useState<number>(0);
@@ -150,6 +151,9 @@ export default function CreateVendorBookingPage() {
             getVendorAddOns(token).then(data => {
                 setVendorAddOns(Array.isArray(data) ? data.filter(a => a.isActive) : []);
             }).catch(() => setVendorAddOns([])),
+            getVendorProfile(token).then(profile => {
+                if (profile.taxRate != null) setVendorTaxRate(Number(profile.taxRate));
+            }).catch(() => {}),
         ]).finally(() => setLoading(false));
     }, [token]);
 
@@ -342,12 +346,12 @@ export default function CreateVendorBookingPage() {
         }
 
         const taxable = subtotal - discount;
-        const taxRate = subjectToTax ? 16 : 0;
+        const taxRate = subjectToTax ? vendorTaxRate : 0;
         const tax = taxable * (taxRate / 100);
         const total = taxable + tax;
 
         return { lineItems, subtotal, discount, discountLabel, taxRate, tax, total };
-    }, [days, branchServices, discountType, discountValue, promoValidation, subjectToTax]);
+    }, [days, branchServices, discountType, discountValue, promoValidation, subjectToTax, vendorTaxRate]);
 
     // Submit
     const handleSubmit = async (e: React.FormEvent) => {
