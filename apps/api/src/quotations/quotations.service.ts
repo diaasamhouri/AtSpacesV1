@@ -341,6 +341,29 @@ export class QuotationsService {
       },
     });
 
+    // Transfer quotation add-ons to booking add-ons
+    const quotationWithAddOns = await this.prisma.quotation.findUnique({
+      where: { id },
+      include: { addOns: true },
+    });
+
+    if (quotationWithAddOns?.addOns && quotationWithAddOns.addOns.length > 0) {
+      for (const addOn of quotationWithAddOns.addOns) {
+        await this.prisma.bookingAddOn.create({
+          data: {
+            bookingId: booking.id,
+            vendorAddOnId: addOn.vendorAddOnId,
+            name: addOn.name,
+            unitPrice: addOn.unitPrice,
+            quantity: addOn.quantity,
+            totalPrice: addOn.totalPrice,
+            serviceTime: addOn.serviceTime,
+            comments: addOn.comments,
+          },
+        });
+      }
+    }
+
     // Link the booking to the quotation
     await this.prisma.quotation.update({
       where: { id },
