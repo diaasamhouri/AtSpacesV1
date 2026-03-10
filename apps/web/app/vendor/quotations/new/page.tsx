@@ -150,7 +150,7 @@ export default function NewQuotationPage() {
             total += dayTotal;
         }
 
-        return { total: Math.round(total * 100) / 100, breakdown, unitPrice: pricing.price };
+        return { total: Math.round(total * 1000) / 1000, breakdown, unitPrice: pricing.price };
     }, [selectedService, pricingInterval, pricingOptions, dateEntries]);
 
     const [totalAmountOverride, setTotalAmountOverride] = useState("");
