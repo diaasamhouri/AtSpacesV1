@@ -107,6 +107,38 @@ export async function updateBookingStatus(token: string, id: string, status: Boo
     return apiFetch<VendorBooking>(`/bookings/${id}/status`, { method: 'PATCH', token, body: { status } });
 }
 
+export async function getVendorBookingById(
+    token: string,
+    bookingId: string,
+): Promise<VendorBooking> {
+    return apiFetch<VendorBooking>(`/bookings/${bookingId}`, { token });
+}
+
+export async function updateVendorBooking(
+    token: string,
+    bookingId: string,
+    data: {
+        branchId?: string;
+        serviceId?: string;
+        startTime?: string;
+        endTime?: string;
+        numberOfPeople?: number;
+        pricingInterval?: string;
+        notes?: string;
+        requestedSetup?: string;
+        addOns?: { vendorAddOnId: string; quantity: number; serviceTime?: string; comments?: string }[];
+        discountType?: string;
+        discountValue?: number;
+        subjectToTax?: boolean;
+    },
+): Promise<VendorBooking> {
+    return apiFetch<VendorBooking>(`/vendor/bookings/${bookingId}`, {
+        token,
+        method: 'PATCH',
+        body: data,
+    });
+}
+
 export async function approveSales(token: string, bookingId: string): Promise<VendorBooking> {
     return apiFetch<VendorBooking>(`/bookings/${bookingId}/approve-sales`, { method: 'PATCH', token });
 }
@@ -156,6 +188,10 @@ export async function getVendorReviews(token: string): Promise<Review[]> {
 
 export async function replyToReview(token: string, reviewId: string, vendorReply: string): Promise<Review> {
     return apiFetch<Review>(`/vendor/reviews/${reviewId}/reply`, { method: 'PATCH', token, body: { vendorReply } });
+}
+
+export async function deleteReviewReply(token: string, reviewId: string): Promise<void> {
+    return apiFetch<void>(`/vendor/reviews/${reviewId}/reply`, { method: 'DELETE', token });
 }
 
 // ==================== PROMOTIONS ====================
