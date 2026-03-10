@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useAuth } from "../../../../lib/auth-context";
 import { getVendorBookings, approveSales, approveAccountant } from "../../../../lib/vendor";
 import DataTable from "../../../components/ui/data-table";
@@ -8,6 +9,8 @@ import type { Column } from "../../../components/ui/data-table";
 import type { VendorBooking } from "../../../../lib/types";
 import { formatSetupType } from "../../../../lib/format";
 import { format } from "date-fns";
+
+const EDITABLE_STATUSES = ["PENDING", "PENDING_APPROVAL", "CONFIRMED"];
 
 interface StatusBookingsPageProps {
   status: string;
@@ -141,6 +144,19 @@ export default function StatusBookingsPage({
       sortable: true,
       sortKey: "totalPrice",
       exportAccessor: (row) => `${row.totalPrice} ${row.currency}`,
+    },
+    {
+      header: "",
+      accessor: (row) =>
+        EDITABLE_STATUSES.includes(row.status) ? (
+          <Link
+            href={`/vendor/bookings/${row.id}/edit`}
+            className="text-sm font-medium text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"
+          >
+            Edit
+          </Link>
+        ) : null,
+      align: "right",
     },
     ...(approvalType ? [{
       header: "Action",
