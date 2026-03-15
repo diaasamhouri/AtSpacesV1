@@ -29,17 +29,6 @@ export function formatPrice(price: number, currency: string = 'JOD'): string {
   return `${price.toFixed(currency === 'JOD' ? 3 : 2)} ${currency}`;
 }
 
-export function formatPricingInterval(interval: string): string {
-  const map: Record<string, string> = {
-    HOURLY: 'hour',
-    HALF_DAY: 'half day',
-    DAILY: 'day',
-    WEEKLY: 'week',
-    MONTHLY: 'month',
-  };
-  return map[interval] || interval;
-}
-
 export function formatPricingMode(mode: string): string {
   const map: Record<string, string> = {
     PER_BOOKING: 'Flat rate',

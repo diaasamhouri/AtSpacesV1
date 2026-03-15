@@ -1,9 +1,9 @@
 import {
-  IsOptional, IsUUID, IsString, IsInt, IsNumber, IsEnum, IsArray, ValidateNested, Min, IsBoolean,
+  IsOptional, IsUUID, IsString, IsInt, IsNumber, IsArray, ValidateNested, Min, IsBoolean, IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { PricingInterval } from '@prisma/client';
+import { PricingMode } from '@prisma/client';
 import { BookingDayAddOnDto } from './booking-day.dto';
 
 export class UpdateVendorBookingDto {
@@ -12,11 +12,11 @@ export class UpdateVendorBookingDto {
   @ApiPropertyOptional() @IsOptional() @IsString() startTime?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() endTime?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) numberOfPeople?: number;
-  @ApiPropertyOptional({ enum: PricingInterval }) @IsOptional() @IsEnum(PricingInterval) pricingInterval?: PricingInterval;
   @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() requestedSetup?: string;
   @ApiPropertyOptional() @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => BookingDayAddOnDto) addOns?: BookingDayAddOnDto[];
   @ApiPropertyOptional() @IsOptional() @IsString() discountType?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) discountValue?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() subjectToTax?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsEnum(PricingMode) pricingMode?: PricingMode;
 }

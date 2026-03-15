@@ -42,7 +42,6 @@ export async function createQuotation(
     discountAmount?: number;
     taxRate?: number;
     taxAmount?: number;
-    pricingInterval?: string;
     pricingMode?: string;
     lineItems?: { description: string; unitPrice: number; quantity: number; totalPrice: number; sortOrder?: number }[];
     addOns?: { vendorAddOnId: string; quantity: number; serviceTime?: string; comments?: string }[];
@@ -67,7 +66,6 @@ export async function updateQuotation(
     discountAmount: number;
     taxRate: number;
     taxAmount: number;
-    pricingInterval: string;
     pricingMode: string;
     lineItems: { description: string; unitPrice: number; quantity: number; totalPrice: number; sortOrder?: number }[];
     addOns: { vendorAddOnId: string; quantity: number; serviceTime?: string; comments?: string }[];
@@ -90,4 +88,8 @@ export async function rejectQuotation(token: string, id: string): Promise<Quotat
 
 export async function convertQuotationToBooking(token: string, id: string): Promise<any> {
   return apiFetch(`/quotations/${id}/convert`, { token, method: "POST" });
+}
+
+export async function deleteQuotation(token: string, id: string) {
+  return apiFetch(`/quotations/${id}`, { method: 'DELETE', token });
 }

@@ -6,11 +6,10 @@ import {
   formatCity,
   formatServiceType,
   formatPrice,
-  formatPricingInterval,
   formatPricingMode,
   formatRoomShape,
 } from '../../../lib/format';
-import { isSetupEligible, type BranchDetail, type ServiceItem, type PricingItem } from '../../../lib/types';
+import { isSetupEligible, getAvailablePricingModes, type BranchDetail, type ServiceItem } from '../../../lib/types';
 import { BookNowButton } from '../../components/book-now-button';
 import { MotionWrapper } from '../../components/ui/motion-wrapper';
 import type { Metadata } from 'next';
@@ -261,24 +260,28 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
                       </div>
                     </div>
 
-                    {/* Pricing grid */}
-                    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {service.pricing.map((p: PricingItem) => (
-                        <div key={p.id}
-                          className="flex flex-col rounded-[1.5rem] bg-slate-50 dark:bg-dark-850 p-5 border border-slate-200 dark:border-slate-700 shadow-sm transition-transform duration-300 group-hover:-translate-y-1">
-                          <span className="text-sm font-bold text-slate-500 mb-1 tracking-wide uppercase">
-                            {formatPricingInterval(p.interval)}
-                          </span>
-                          <span className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-                            {formatPrice(p.price, p.currency)}
-                          </span>
-                          {p.pricingMode && p.pricingMode !== 'PER_BOOKING' && (
-                            <span className="text-xs font-medium text-slate-500 mt-0.5">
-                              {formatPricingMode(p.pricingMode)}
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                    {/* Pricing */}
+                    <div className="mt-8">
+                      {(() => {
+                        const modes = getAvailablePricingModes(service);
+                        if (modes.length === 0) return null;
+                        return (
+                          <div className="inline-flex flex-wrap gap-3">
+                            {modes.map((m) => (
+                              <div key={m.mode} className="inline-flex flex-col rounded-[1.5rem] bg-slate-50 dark:bg-dark-850 p-5 border border-slate-200 dark:border-slate-700 shadow-sm transition-transform duration-300 group-hover:-translate-y-1">
+                                <span className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                                  {formatPrice(m.price, service.currency || 'JOD')}
+                                </span>
+                                {m.mode !== 'PER_BOOKING' && (
+                                  <span className="text-xs font-medium text-slate-500 mt-0.5">
+                                    {formatPricingMode(m.mode)}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}
@@ -373,12 +376,14 @@ export default async function SpaceDetailPage({ params }: SpaceDetailPageProps) 
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div>
             {branch.services.length > 0 && (() => {
-              const allPrices = branch.services.flatMap((s: ServiceItem) => s.pricing.map((p: PricingItem) => ({ price: Number(p.price), currency: p.currency, interval: p.interval, pricingMode: p.pricingMode })));
+              const allPrices = branch.services.flatMap((s: ServiceItem) =>
+                getAvailablePricingModes(s).map((m) => ({ price: m.price, currency: s.currency || 'JOD', mode: m.mode }))
+              );
               const lowest = allPrices.sort((a, b) => a.price - b.price)[0];
               return lowest ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                   From <span className="text-lg font-bold text-gray-900 dark:text-white">{formatPrice(lowest.price, lowest.currency)}</span>
-                  <span className="text-xs">/{formatPricingInterval(lowest.interval).toLowerCase()}{lowest.pricingMode === 'PER_PERSON' ? ' /person' : lowest.pricingMode === 'PER_HOUR' ? ' /hr' : ''}</span>
+                  {lowest.mode !== 'PER_BOOKING' && <span className="text-xs"> ({formatPricingMode(lowest.mode)})</span>}
                 </p>
               ) : null;
             })()}

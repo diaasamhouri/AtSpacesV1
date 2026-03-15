@@ -10,9 +10,9 @@ import {
 } from "../../../../lib/vendor";
 import { createQuotation } from "../../../../lib/quotations";
 import { CreateCustomerModal } from "../../../components/create-customer-modal";
-import type { VendorBranchDetail, ServiceItem, CustomerSearchResult, VendorAddOn } from "../../../../lib/types";
-import { isSetupEligible } from "../../../../lib/types";
-import { formatSetupType } from "../../../../lib/format";
+import type { VendorBranchDetail, ServiceItem, CustomerSearchResult, VendorAddOn, ServiceType } from "../../../../lib/types";
+import { isSetupEligible, getAvailablePricingModes, getServicePriceByMode } from "../../../../lib/types";
+import { formatSetupType, formatServiceType } from "../../../../lib/format";
 
 interface AddOnRow {
     id: string;
@@ -31,7 +31,7 @@ interface BookingDayRow {
     endTime: string;
     serviceId: string;
     setupType: string;
-    pricingInterval: string;
+    pricingMode: string;
     unitPrice: number;
     numberOfPeople: number;
     notes: string;
@@ -69,6 +69,7 @@ export default function CreateVendorBookingPage() {
     const qEndTime = searchParams.get("endTime") || "";
     const qCapacity = searchParams.get("capacity") || "";
     const qDates = searchParams.get("dates") || "";
+    const qServiceType = searchParams.get("serviceType") || "";
     const qMode = searchParams.get("mode") || "book";
     const lockedCapacity = !!qCapacity;
 
@@ -93,8 +94,9 @@ export default function CreateVendorBookingPage() {
     const customerDropdownRef = useRef<HTMLDivElement>(null);
     const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Branch
+    // Branch & service type filter
     const [branchId, setBranchId] = useState(qBranchId);
+    const [serviceTypeFilter, setServiceTypeFilter] = useState<string>(qServiceType);
 
     // Days
     const initialPeople = qCapacity ? parseInt(qCapacity) || 1 : 1;
@@ -107,7 +109,7 @@ export default function CreateVendorBookingPage() {
             endTime: qEndTime || "17:00",
             serviceId: "",
             setupType: "",
-            pricingInterval: "",
+            pricingMode: "",
             unitPrice: 0,
             numberOfPeople: initialPeople,
             notes: "",
@@ -163,14 +165,31 @@ export default function CreateVendorBookingPage() {
         return b?.services || [];
     }, [branchId, branches]);
 
+    // Get unique service types for filter dropdown
+    const availableServiceTypes = useMemo(() => {
+        return [...new Set(branchServices.map(s => s.type))];
+    }, [branchServices]);
+
+    // Filtered services by type
+    const filteredServices = useMemo(() => {
+        if (!serviceTypeFilter) return branchServices;
+        return branchServices.filter(s => s.type === serviceTypeFilter);
+    }, [branchServices, serviceTypeFilter]);
+
     // Reset service selections when branch changes (but pre-fill from search if available)
+    const initialBranchLoad = useRef(true);
     useEffect(() => {
         if (!branchId) return;
+        if (initialBranchLoad.current) {
+            initialBranchLoad.current = false;
+        } else {
+            setServiceTypeFilter("");
+        }
         if (pendingServiceId && branchServices.some(s => s.id === pendingServiceId)) {
             setDays(prev => prev.map(d => ({ ...d, serviceId: pendingServiceId })));
             setPendingServiceId("");
         } else if (!pendingServiceId) {
-            setDays(prev => prev.map(d => ({ ...d, serviceId: "", setupType: "", pricingInterval: "", unitPrice: 0 })));
+            setDays(prev => prev.map(d => ({ ...d, serviceId: "", setupType: "", pricingMode: "", unitPrice: 0 })));
         }
     }, [branchId, branchServices, pendingServiceId]);
 
@@ -226,11 +245,11 @@ export default function CreateVendorBookingPage() {
             endTime: last.endTime,
             serviceId: last.serviceId,
             setupType: last.setupType,
-            pricingInterval: last.pricingInterval,
+            pricingMode: last.pricingMode,
             unitPrice: last.unitPrice,
             numberOfPeople: last.numberOfPeople,
-            notes: "",
-            addOns: [],
+            notes: last.notes,
+            addOns: last.addOns.map(a => ({ ...a, id: nextId() })),
             expanded: false,
         }]);
     };
@@ -270,12 +289,15 @@ export default function CreateVendorBookingPage() {
 
     // When service changes in a row, update setup/pricing options
     const handleServiceChange = (dayId: string, serviceId: string) => {
-        updateDay(dayId, { serviceId, setupType: "", pricingInterval: "", unitPrice: 0 });
-    };
-
-    const handlePricingChange = (dayId: string, interval: string, service: ServiceItem | undefined) => {
-        const p = service?.pricing?.find(p => p.interval === interval);
-        updateDay(dayId, { pricingInterval: interval, unitPrice: p ? p.price : 0 });
+        const svc = branchServices.find(s => s.id === serviceId);
+        const modes = svc ? getAvailablePricingModes(svc) : [];
+        const defaultMode = modes[0];
+        updateDay(dayId, {
+            serviceId,
+            setupType: "",
+            pricingMode: defaultMode?.mode || "",
+            unitPrice: defaultMode?.price || 0,
+        });
     };
 
     // Promo validation
@@ -306,8 +328,7 @@ export default function CreateVendorBookingPage() {
             const dateLabel = day.date ? `(${day.date.slice(5).replace("-", "/")})` : "";
 
             if (day.unitPrice > 0) {
-                const pricingRecord = svc?.pricing?.find(p => p.interval === day.pricingInterval);
-                const pricingMode = pricingRecord?.pricingMode || "PER_BOOKING";
+                const pricingMode = day.pricingMode || "PER_BOOKING";
                 let qty = 1;
 
                 if (pricingMode === "PER_PERSON") {
@@ -378,14 +399,12 @@ export default function CreateVendorBookingPage() {
                 // Use first day's service as the primary service
                 const primaryServiceId = firstDay.serviceId;
                 const primarySvc = branchServices.find(s => s.id === primaryServiceId);
-                const pricingRecord = primarySvc?.pricing?.find(p => p.interval === firstDay.pricingInterval);
 
                 // Build line items from all day rows
                 const lineItems = days.map((day, i) => {
                     const svc = branchServices.find(s => s.id === day.serviceId);
                     const svcName = svc?.name || "Room";
-                    const pr = svc?.pricing?.find(p => p.interval === day.pricingInterval);
-                    const pricingMode = pr?.pricingMode || "PER_BOOKING";
+                    const pricingMode = day.pricingMode || "PER_BOOKING";
                     let qty = 1;
 
                     if (pricingMode === "PER_PERSON") {
@@ -408,6 +427,13 @@ export default function CreateVendorBookingPage() {
 
                 const totalAmount = financial.subtotal;
 
+                const allAddOns = days.flatMap(d => d.addOns.filter(a => a.vendorAddOnId).map(a => ({
+                    vendorAddOnId: a.vendorAddOnId,
+                    quantity: a.quantity,
+                    serviceTime: a.serviceTime || undefined,
+                    comments: a.comments || undefined,
+                })));
+
                 await createQuotation(token!, {
                     customerId,
                     branchId,
@@ -415,12 +441,15 @@ export default function CreateVendorBookingPage() {
                     startTime: startTimeISO,
                     endTime: endTimeISO,
                     numberOfPeople: firstDay.numberOfPeople,
-                    totalAmount,
+                    totalAmount: financial.total,
                     notes: generalNotes || undefined,
-                    subtotal: totalAmount,
-                    pricingInterval: firstDay.pricingInterval || undefined,
-                    pricingMode: pricingRecord?.pricingMode || undefined,
+                    subtotal: financial.subtotal,
+                    pricingMode: firstDay.pricingMode || undefined,
+                    discountType: discountType !== "NONE" && discountType !== "PROMO_CODE" ? discountType : undefined,
+                    discountValue: discountType !== "NONE" && discountType !== "PROMO_CODE" ? discountValue : undefined,
+                    taxRate: subjectToTax ? vendorTaxRate : 0,
                     lineItems: lineItems.length > 0 ? lineItems : undefined,
+                    addOns: allAddOns.length > 0 ? allAddOns : undefined,
                 });
 
                 setQuoteCreated(true);
@@ -435,7 +464,7 @@ export default function CreateVendorBookingPage() {
                         endTime: d.endTime,
                         serviceId: d.serviceId,
                         setupType: d.setupType || undefined,
-                        pricingInterval: d.pricingInterval || undefined,
+                        pricingMode: d.pricingMode || undefined,
                         unitPrice: d.unitPrice || undefined,
                         numberOfPeople: d.numberOfPeople || undefined,
                         notes: d.notes || undefined,
@@ -643,13 +672,19 @@ export default function CreateVendorBookingPage() {
                     )}
                 </div>
 
-                {/* ============ SECTION 2: Branch ============ */}
+                {/* ============ SECTION 2: Branch & Type Filter ============ */}
                 <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                    <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Branch</h2>
-                    <select value={branchId} onChange={e => setBranchId(e.target.value)} required className={selectCls}>
-                        <option value="">Select a branch</option>
-                        {branches.map(b => <option key={b.id} value={b.id}>{b.name} - {b.city}</option>)}
-                    </select>
+                    <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Branch & Unit Type</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <select value={branchId} onChange={e => setBranchId(e.target.value)} required className={selectCls}>
+                            <option value="">Select a branch</option>
+                            {branches.map(b => <option key={b.id} value={b.id}>{b.name} - {b.city}</option>)}
+                        </select>
+                        <select value={serviceTypeFilter} onChange={e => setServiceTypeFilter(e.target.value)} disabled={!branchId} className={selectCls}>
+                            <option value="">All unit types</option>
+                            {availableServiceTypes.map(t => <option key={t} value={t}>{formatServiceType(t)}</option>)}
+                        </select>
+                    </div>
                 </div>
 
                 {/* ============ SECTION 3: Booking Days Table ============ */}
@@ -682,7 +717,7 @@ export default function CreateVendorBookingPage() {
                                             <td className="px-3 py-2">
                                                 <select value={day.serviceId} onChange={e => handleServiceChange(day.id, e.target.value)} disabled={!branchId} className={selectCls}>
                                                     <option value="">{branchId ? "Select room" : "Select branch"}</option>
-                                                    {branchServices.map(s => <option key={s.id} value={s.id}>{s.name}{s.isPublic === false ? " (hidden)" : ""}</option>)}
+                                                    {filteredServices.map(s => <option key={s.id} value={s.id}>{s.name}{s.isPublic === false ? " (hidden)" : ""}</option>)}
                                                 </select>
                                             </td>
                                             <td className="px-3 py-2">
@@ -692,9 +727,17 @@ export default function CreateVendorBookingPage() {
                                                 </select>
                                             </td>
                                             <td className="px-3 py-2">
-                                                <select value={day.pricingInterval} onChange={e => handlePricingChange(day.id, e.target.value, svc)} disabled={!svc} className={selectCls}>
-                                                    <option value="">Select</option>
-                                                    {(svc?.pricing || []).map(p => <option key={p.interval} value={p.interval}>{p.interval.toLowerCase().replace("_", " ")} ({p.price} JOD{p.pricingMode === "PER_PERSON" ? "/person" : p.pricingMode === "PER_HOUR" ? "/hour" : ""})</option>)}
+                                                <select value={day.pricingMode} onChange={e => {
+                                                    const mode = e.target.value;
+                                                    const price = svc ? getServicePriceByMode(svc, mode) : 0;
+                                                    updateDay(day.id, { pricingMode: mode, unitPrice: price });
+                                                }} disabled={!day.serviceId} className={selectCls}>
+                                                    <option value="">—</option>
+                                                    {(svc ? getAvailablePricingModes(svc) : []).map(m => (
+                                                        <option key={m.mode} value={m.mode}>
+                                                            {m.price.toFixed(3)} JOD {m.mode === 'PER_PERSON' ? '/person' : m.mode === 'PER_HOUR' ? '/hour' : '/booking'}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </td>
                                             <td className="px-3 py-2">
@@ -714,12 +757,10 @@ export default function CreateVendorBookingPage() {
                                             </td>
                                             <td className="px-3 py-2">
                                                 <div className="flex gap-1">
-                                                    {!isQuote && (
-                                                        <button type="button" onClick={() => addAddOn(day.id)} title="Add add-on"
-                                                            className="rounded-lg px-2 py-1.5 text-xs font-medium text-brand-400 hover:bg-brand-500/10 transition-colors">
-                                                            +Add
-                                                        </button>
-                                                    )}
+                                                    <button type="button" onClick={() => addAddOn(day.id)} title="Add add-on"
+                                                        className="rounded-lg px-2 py-1.5 text-xs font-medium text-brand-400 hover:bg-brand-500/10 transition-colors">
+                                                        +Add
+                                                    </button>
                                                     <button type="button" onClick={() => removeDay(day.id)} disabled={days.length <= 1} title="Remove day"
                                                         className="rounded-lg px-2 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-30">
                                                         Del
@@ -733,21 +774,21 @@ export default function CreateVendorBookingPage() {
                         </table>
                     </div>
 
-                    {/* Add-ons sub-rows (booking mode only) */}
-                    {!isQuote && days.filter(d => d.addOns.length > 0).map(day => (
+                    {/* Add-ons sub-rows */}
+                    {days.filter(d => d.addOns.length > 0).map(day => (
                         <div key={`addons-${day.id}`} className="mt-3 ml-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-dark-850 p-4">
                             <p className="text-xs font-bold text-slate-500 mb-2">Add-ons for {day.date}</p>
                             {day.addOns.map(addOn => (
-                                <div key={addOn.id} className="flex gap-2 items-center mb-2">
+                                <div key={addOn.id} className="grid grid-cols-[1fr_80px_auto_auto] gap-3 items-center mb-2">
                                     <select value={addOn.vendorAddOnId} onChange={e => selectAddOnFromCatalog(day.id, addOn.id, e.target.value)}
-                                        className={`${selectCls} flex-1`}>
+                                        className={selectCls}>
                                         <option value="">Select add-on</option>
                                         {vendorAddOns.map(a => <option key={a.id} value={a.id}>{a.name} ({a.unitPrice.toFixed(3)} JOD)</option>)}
                                     </select>
                                     <input type="number" min="1" value={addOn.quantity} onChange={e => updateAddOn(day.id, addOn.id, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
-                                        className={`${inputCls} w-20`} placeholder="Qty" />
-                                    <span className="text-xs text-slate-500 w-24 text-right">{(addOn.unitPrice * addOn.quantity).toFixed(3)} JOD</span>
-                                    <button type="button" onClick={() => removeAddOn(day.id, addOn.id)} className="text-red-400 hover:text-red-300 p-1">
+                                        className={inputCls} placeholder="Qty" />
+                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap min-w-[90px] text-right">{(addOn.unitPrice * addOn.quantity).toFixed(3)} JOD</span>
+                                    <button type="button" onClick={() => removeAddOn(day.id, addOn.id)} className="text-red-400 hover:text-red-300 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors">
                                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
                                     </button>
                                 </div>
@@ -761,8 +802,8 @@ export default function CreateVendorBookingPage() {
                     </button>
                 </div>
 
-                {/* ============ SECTION 4: Tax & Discount (booking mode only) ============ */}
-                {!isQuote && <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                {/* ============ SECTION 4: Tax & Discount ============ */}
+                <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-sm border border-slate-200 dark:border-slate-800">
                     <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Tax & Discount</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -817,7 +858,7 @@ export default function CreateVendorBookingPage() {
                             </div>
                         )}
                     </div>
-                </div>}
+                </div>
 
                 {/* ============ SECTION 5: Notes ============ */}
                 <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-sm border border-slate-200 dark:border-slate-800">
@@ -857,35 +898,26 @@ export default function CreateVendorBookingPage() {
                             </div>
 
                             <div className="mt-4 ml-auto max-w-xs space-y-2">
-                                {isQuote ? (
-                                    <div className="flex justify-between text-base font-bold">
-                                        <span className="text-gray-900 dark:text-white">Total</span>
-                                        <span className="text-blue-500">{financial.subtotal.toFixed(3)} JOD</span>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-500">Subtotal</span>
+                                    <span className="font-medium text-gray-900 dark:text-white">{financial.subtotal.toFixed(3)} JOD</span>
+                                </div>
+                                {financial.discount > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-red-400">{financial.discountLabel}</span>
+                                        <span className="font-medium text-red-400">-{financial.discount.toFixed(3)} JOD</span>
                                     </div>
-                                ) : (
-                                    <>
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-slate-500">Subtotal</span>
-                                            <span className="font-medium text-gray-900 dark:text-white">{financial.subtotal.toFixed(3)} JOD</span>
-                                        </div>
-                                        {financial.discount > 0 && (
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-red-400">{financial.discountLabel}</span>
-                                                <span className="font-medium text-red-400">-{financial.discount.toFixed(3)} JOD</span>
-                                            </div>
-                                        )}
-                                        {financial.tax > 0 && (
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-slate-500">Sales Tax ({financial.taxRate}%)</span>
-                                                <span className="font-medium text-gray-900 dark:text-white">{financial.tax.toFixed(3)} JOD</span>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between text-base font-bold border-t border-slate-200 dark:border-slate-700 pt-2 mt-2">
-                                            <span className="text-gray-900 dark:text-white">Total</span>
-                                            <span className="text-brand-400">{financial.total.toFixed(3)} JOD</span>
-                                        </div>
-                                    </>
                                 )}
+                                {financial.tax > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-500">Sales Tax ({financial.taxRate}%)</span>
+                                        <span className="font-medium text-gray-900 dark:text-white">{financial.tax.toFixed(3)} JOD</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between text-base font-bold border-t border-slate-200 dark:border-slate-700 pt-2 mt-2">
+                                    <span className="text-gray-900 dark:text-white">Total</span>
+                                    <span className={isQuote ? "text-blue-500" : "text-brand-400"}>{financial.total.toFixed(3)} JOD</span>
+                                </div>
                             </div>
                         </>
                     ) : (

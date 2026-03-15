@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/auth-context";
 import { getAdminServices, getAdminBranches, deleteAdminService } from "../../../lib/admin";
+import { formatRoomShape, formatSetupType, formatServiceType } from "../../../lib/format";
+import { SERVICE_TYPE_OPTIONS } from "../../../lib/types";
 import DataTable from "../../components/ui/data-table";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 import type { Column } from "../../components/ui/data-table";
@@ -11,29 +13,8 @@ import type { AdminService, AdminBranch } from "../../../lib/types";
 
 const SERVICE_TYPES = [
   { value: "", label: "All Types" },
-  { value: "HOT_DESK", label: "Hot Desk" },
-  { value: "PRIVATE_OFFICE", label: "Private Office" },
-  { value: "MEETING_ROOM", label: "Meeting Room" },
-  { value: "EVENT_SPACE", label: "Event Space" },
+  ...SERVICE_TYPE_OPTIONS,
 ];
-
-const SHAPE_LABELS: Record<string, string> = {
-  L_SHAPE: "L-Shape",
-  U_SHAPE: "U-Shape",
-  RECTANGLE: "Rectangle",
-  SQUARE: "Square",
-  OVAL: "Oval",
-  CUSTOM: "Custom",
-};
-
-const SETUP_LABELS: Record<string, string> = {
-  CLASSROOM: "Classroom",
-  THEATER: "Theater",
-  BOARDROOM: "Boardroom",
-  U_SHAPE_SEATING: "U-Shape Seating",
-  HOLLOW_SQUARE: "Hollow Square",
-  BANQUET: "Banquet",
-};
 
 export default function AdminServicesPage() {
   const { token } = useAuth();
@@ -94,11 +75,24 @@ export default function AdminServicesPage() {
     { header: "ID", accessor: (row) => <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{row.id.slice(0, 8)}</span>, exportAccessor: (row) => row.id.slice(0, 8) },
     { header: "Branch", accessor: (row) => <span className="text-sm text-slate-600 dark:text-slate-300">{row.branch.name}</span>, sortable: true, sortKey: "branch", exportAccessor: (row) => row.branch.name },
     { header: "Name", accessor: (row) => <span className="text-sm font-medium text-gray-900 dark:text-white">{row.name}</span>, sortable: true, sortKey: "name", exportAccessor: (row) => row.name },
-    { header: "Type", accessor: (row) => <span className="text-xs rounded-full bg-brand-500/10 text-brand-500 px-2 py-0.5">{row.type.replace(/_/g, " ")}</span>, exportAccessor: (row) => row.type },
+    { header: "Type", accessor: (row) => <span className="text-xs rounded-full bg-brand-500/10 text-brand-500 px-2 py-0.5">{formatServiceType(row.type)}</span>, exportAccessor: (row) => row.type },
     { header: "Capacity", accessor: (row) => <span className="text-sm text-slate-600 dark:text-slate-300">{row.capacity ?? "-"}</span>, align: "right" as const, exportAccessor: (row) => row.capacity != null ? String(row.capacity) : "-" },
     { header: "Floor", accessor: (row) => <span className="text-sm text-slate-500 dark:text-slate-400">{row.floor || "-"}</span>, exportAccessor: (row) => row.floor || "-" },
-    { header: "Shape", accessor: (row) => <span className="text-sm text-slate-500 dark:text-slate-400">{row.shape ? SHAPE_LABELS[row.shape] || row.shape : "-"}</span>, exportAccessor: (row) => row.shape || "-" },
-    { header: "Setup Types", accessor: (row) => <span className="text-sm text-slate-500 dark:text-slate-400">{row.setupConfigs && row.setupConfigs.length > 0 ? row.setupConfigs.map((sc) => SETUP_LABELS[sc.setupType] || sc.setupType).join(", ") : "-"}</span>, exportAccessor: (row) => row.setupConfigs && row.setupConfigs.length > 0 ? row.setupConfigs.map((sc) => SETUP_LABELS[sc.setupType] || sc.setupType).join(", ") : "-" },
+    { header: "Shape", accessor: (row) => <span className="text-sm text-slate-500 dark:text-slate-400">{row.shape ? formatRoomShape(row.shape) : "-"}</span>, exportAccessor: (row) => row.shape || "-" },
+    { header: "Setup Types", accessor: (row) => <span className="text-sm text-slate-500 dark:text-slate-400">{row.setupConfigs && row.setupConfigs.length > 0 ? row.setupConfigs.map((sc) => formatSetupType(sc.setupType)).join(", ") : "-"}</span>, exportAccessor: (row) => row.setupConfigs && row.setupConfigs.length > 0 ? row.setupConfigs.map((sc) => formatSetupType(sc.setupType)).join(", ") : "-" },
+    { header: "Pricing", accessor: (row) => {
+      const parts: string[] = [];
+      if (row.pricePerBooking != null) parts.push(`${Number(row.pricePerBooking).toFixed(3)}/booking`);
+      if (row.pricePerPerson != null) parts.push(`${Number(row.pricePerPerson).toFixed(3)}/person`);
+      if (row.pricePerHour != null) parts.push(`${Number(row.pricePerHour).toFixed(3)}/hr`);
+      return <span className="text-sm text-slate-600 dark:text-slate-300">{parts.length > 0 ? parts.join(", ") : "\u2014"}</span>;
+    }, exportAccessor: (row) => {
+      const parts: string[] = [];
+      if (row.pricePerBooking != null) parts.push(`${Number(row.pricePerBooking).toFixed(3)}/booking`);
+      if (row.pricePerPerson != null) parts.push(`${Number(row.pricePerPerson).toFixed(3)}/person`);
+      if (row.pricePerHour != null) parts.push(`${Number(row.pricePerHour).toFixed(3)}/hr`);
+      return parts.length > 0 ? parts.join(", ") : "-";
+    }},
     { header: "Active", accessor: (row) => row.isActive ? <span className="text-green-400 text-xs font-bold">Active</span> : <span className="text-red-400 text-xs font-bold">Inactive</span>, exportAccessor: (row) => row.isActive ? "Active" : "Inactive" },
     {
       header: "Actions",

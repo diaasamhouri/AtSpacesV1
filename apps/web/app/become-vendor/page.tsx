@@ -197,7 +197,7 @@ export default function VendorApplicationPage() {
       if (img.url) { urls.push(img.url); continue; }
       const formData = new FormData();
       formData.append("file", img.file);
-      const res = await fetch(`${API}/uploads`, { method: "POST", body: formData });
+      const res = await fetch(`${API}/uploads`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
       if (!res.ok) throw new Error("Image upload failed");
       const data = await res.json();
       img.url = data.url;
@@ -427,7 +427,7 @@ export default function VendorApplicationPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">Registration Date</label>
-                <input type="date" value={companyRegistrationDate} onChange={(e) => setCompanyRegistrationDate(e.target.value)} className={inputCls} />
+                <input type="date" value={companyRegistrationDate} onChange={(e) => setCompanyRegistrationDate(e.target.value)} className={inputCls} max={new Date().toISOString().split("T")[0]} />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">Sales Tax Number</label>

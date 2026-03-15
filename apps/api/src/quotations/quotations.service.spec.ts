@@ -59,7 +59,6 @@ const baseQuotationRecord = {
   discountAmount: null,
   taxRate: null,
   taxAmount: null,
-  pricingInterval: null,
   pricingMode: null,
   sentAt: null,
   bookingId: null,
@@ -101,6 +100,7 @@ describe('QuotationsService', () => {
       findMany: jest.Mock;
       count: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
     };
     quotationLineItem: { deleteMany: jest.Mock };
     quotationAddOn: { create: jest.Mock; deleteMany: jest.Mock };
@@ -119,6 +119,7 @@ describe('QuotationsService', () => {
         findMany: jest.fn(),
         count: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
       },
       quotationLineItem: { deleteMany: jest.fn() },
       quotationAddOn: { create: jest.fn(), deleteMany: jest.fn() },
@@ -173,7 +174,7 @@ describe('QuotationsService', () => {
             serviceId: SERVICE_ID,
             totalAmount: 100,
           }),
-          include: expect.objectContaining({ addOns: true }),
+          include: expect.objectContaining({ addOns: { include: { vendorAddOn: true } } }),
         }),
       );
     });
@@ -620,6 +621,91 @@ describe('QuotationsService', () => {
       await service.convertToBooking(USER_ID, QUOTATION_ID);
 
       expect(prisma.bookingAddOn.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // deleteQuotation
+  // =========================================================================
+  describe('deleteQuotation', () => {
+    it('should delete a NOT_SENT quotation owned by the user', async () => {
+      prisma.quotation.findUnique.mockResolvedValue({
+        ...baseQuotationRecord,
+        status: 'NOT_SENT',
+        createdById: USER_ID,
+      });
+      prisma.quotation.delete.mockResolvedValue({});
+
+      const result = await service.deleteQuotation(USER_ID, QUOTATION_ID);
+      expect(result).toEqual({ message: 'Quotation deleted' });
+      expect(prisma.quotation.delete).toHaveBeenCalledWith({
+        where: { id: QUOTATION_ID },
+      });
+    });
+
+    it('should delete a REJECTED quotation owned by the user', async () => {
+      prisma.quotation.findUnique.mockResolvedValue({
+        ...baseQuotationRecord,
+        status: 'REJECTED',
+        createdById: USER_ID,
+      });
+      prisma.quotation.delete.mockResolvedValue({});
+
+      const result = await service.deleteQuotation(USER_ID, QUOTATION_ID);
+      expect(result).toEqual({ message: 'Quotation deleted' });
+    });
+
+    it('should throw NotFoundException when quotation does not exist', async () => {
+      prisma.quotation.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.deleteQuotation(USER_ID, QUOTATION_ID),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.deleteQuotation(USER_ID, QUOTATION_ID),
+      ).rejects.toThrow('Quotation not found');
+    });
+
+    it('should throw ForbiddenException when quotation belongs to another user', async () => {
+      prisma.quotation.findUnique.mockResolvedValue({
+        ...baseQuotationRecord,
+        status: 'NOT_SENT',
+        createdById: 'other-user-id',
+      });
+
+      await expect(
+        service.deleteQuotation(USER_ID, QUOTATION_ID),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.deleteQuotation(USER_ID, QUOTATION_ID),
+      ).rejects.toThrow('Not your quotation');
+    });
+
+    it('should throw BadRequestException when quotation status is SENT', async () => {
+      prisma.quotation.findUnique.mockResolvedValue({
+        ...baseQuotationRecord,
+        status: 'SENT',
+        createdById: USER_ID,
+      });
+
+      await expect(
+        service.deleteQuotation(USER_ID, QUOTATION_ID),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.deleteQuotation(USER_ID, QUOTATION_ID),
+      ).rejects.toThrow('Only NOT_SENT or REJECTED quotations can be deleted');
+    });
+
+    it('should throw BadRequestException when quotation status is ACCEPTED', async () => {
+      prisma.quotation.findUnique.mockResolvedValue({
+        ...baseQuotationRecord,
+        status: 'ACCEPTED',
+        createdById: USER_ID,
+      });
+
+      await expect(
+        service.deleteQuotation(USER_ID, QUOTATION_ID),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

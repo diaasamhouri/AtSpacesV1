@@ -16,7 +16,7 @@ const quotationInclude = {
   service: { select: { name: true, type: true } },
   createdBy: { select: { name: true } },
   lineItems: { orderBy: { sortOrder: 'asc' as const } },
-  addOns: true,
+  addOns: { include: { vendorAddOn: true } },
 };
 
 @Injectable()
@@ -51,7 +51,6 @@ export class QuotationsService {
         discountAmount: dto.discountAmount,
         taxRate: dto.taxRate,
         taxAmount: dto.taxAmount,
-        pricingInterval: dto.pricingInterval,
         pricingMode: dto.pricingMode,
         ...(dto.lineItems?.length
           ? {
@@ -296,6 +295,22 @@ export class QuotationsService {
     });
 
     return this.serializeQuotation(quotation);
+  }
+
+  async deleteQuotation(userId: string, quotationId: string) {
+    const quotation = await this.prisma.quotation.findUnique({
+      where: { id: quotationId },
+    });
+    if (!quotation) throw new NotFoundException('Quotation not found');
+    if (quotation.createdById !== userId)
+      throw new ForbiddenException('Not your quotation');
+    if (!['NOT_SENT', 'REJECTED'].includes(quotation.status)) {
+      throw new BadRequestException(
+        'Only NOT_SENT or REJECTED quotations can be deleted',
+      );
+    }
+    await this.prisma.quotation.delete({ where: { id: quotationId } });
+    return { message: 'Quotation deleted' };
   }
 
   async sendQuotation(userId: string, id: string) {
@@ -654,7 +669,6 @@ export class QuotationsService {
       discountAmount: quotation.discountAmount?.toNumber() ?? null,
       taxRate: quotation.taxRate?.toNumber() ?? null,
       taxAmount: quotation.taxAmount?.toNumber() ?? null,
-      pricingInterval: quotation.pricingInterval ?? null,
       pricingMode: quotation.pricingMode ?? null,
       sentAt: quotation.sentAt?.toISOString() ?? null,
       bookingId: quotation.bookingId,

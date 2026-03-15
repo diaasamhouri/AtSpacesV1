@@ -74,12 +74,9 @@ export class BranchesService {
             where: { isActive: true, isPublic: true },
             select: {
               type: true,
-              pricing: {
-                where: { isActive: true, isPublic: true },
-                select: { price: true, pricingMode: true, interval: true },
-                orderBy: { price: 'asc' },
-                take: 1,
-              },
+              pricePerBooking: true,
+              pricePerPerson: true,
+              pricePerHour: true,
             },
           },
         },
@@ -89,8 +86,22 @@ export class BranchesService {
 
     let data = branches.map((branch) => {
       const serviceTypes = [...new Set(branch.services.map((s) => s.type))];
-      const allPricingItems = branch.services.flatMap((s) => s.pricing);
-      const cheapest = allPricingItems.sort((a, b) => a.price.toNumber() - b.price.toNumber())[0];
+
+      // Find the lowest price across all three pricing columns
+      let startingPrice: number | null = null;
+      let startingPricingMode: string | null = null;
+      for (const s of branch.services) {
+        const candidates: { price: number; mode: string }[] = [];
+        if (s.pricePerBooking) candidates.push({ price: Number(s.pricePerBooking), mode: 'PER_BOOKING' });
+        if (s.pricePerPerson) candidates.push({ price: Number(s.pricePerPerson), mode: 'PER_PERSON' });
+        if (s.pricePerHour) candidates.push({ price: Number(s.pricePerHour), mode: 'PER_HOUR' });
+        for (const c of candidates) {
+          if (startingPrice === null || c.price < startingPrice) {
+            startingPrice = c.price;
+            startingPricingMode = c.mode;
+          }
+        }
+      }
 
       return {
         id: branch.id,
@@ -101,9 +112,8 @@ export class BranchesService {
         images: branch.images,
         vendor: branch.vendor,
         serviceTypes,
-        startingPrice: cheapest ? cheapest.price.toNumber() : null,
-        startingPricingMode: cheapest?.pricingMode || null,
-        startingPricingInterval: cheapest?.interval || null,
+        startingPrice,
+        startingPricingMode,
       };
     });
 
@@ -170,17 +180,10 @@ export class BranchesService {
             netSize: true,
             shape: true,
             features: true,
-            pricing: {
-              where: { isActive: true, isPublic: true },
-              orderBy: { price: 'asc' },
-              select: {
-                id: true,
-                interval: true,
-                pricingMode: true,
-                price: true,
-                currency: true,
-              },
-            },
+            pricePerBooking: true,
+            pricePerPerson: true,
+            pricePerHour: true,
+            currency: true,
             setupConfigs: {
               select: {
                 setupType: true,
@@ -202,10 +205,9 @@ export class BranchesService {
       services: branch.services.map((service) => ({
         ...service,
         netSize: service.netSize ? service.netSize.toNumber() : null,
-        pricing: service.pricing.map((p) => ({
-          ...p,
-          price: p.price.toNumber(),
-        })),
+        pricePerBooking: service.pricePerBooking ? Number(service.pricePerBooking) : null,
+        pricePerPerson: service.pricePerPerson ? Number(service.pricePerPerson) : null,
+        pricePerHour: service.pricePerHour ? Number(service.pricePerHour) : null,
       })),
     };
   }
@@ -246,10 +248,10 @@ export class BranchesService {
             setupConfigs: {
               select: { setupType: true, minPeople: true, maxPeople: true },
             },
-            pricing: {
-              orderBy: { price: 'asc' },
-              select: { id: true, interval: true, pricingMode: true, price: true, currency: true, isActive: true, isPublic: true },
-            },
+            pricePerBooking: true,
+            pricePerPerson: true,
+            pricePerHour: true,
+            currency: true,
           }
         }
       }
@@ -261,7 +263,9 @@ export class BranchesService {
         services: b.services.map(s => ({
           ...s,
           netSize: s.netSize ? s.netSize.toNumber() : null,
-          pricing: s.pricing.map(p => ({ ...p, price: p.price.toNumber() })),
+          pricePerBooking: s.pricePerBooking ? Number(s.pricePerBooking) : null,
+          pricePerPerson: s.pricePerPerson ? Number(s.pricePerPerson) : null,
+          pricePerHour: s.pricePerHour ? Number(s.pricePerHour) : null,
         })),
       })),
     };
@@ -325,8 +329,10 @@ export class BranchesService {
       throw new NotFoundException('Branch not found');
     }
 
+    // If already suspended, permanently delete it
     if (branch.status === 'SUSPENDED') {
-      throw new BadRequestException('Branch is already suspended');
+      await this.prisma.branch.delete({ where: { id: branchId } });
+      return { message: 'Branch deleted permanently' };
     }
 
     // Check for active bookings across all services in this branch

@@ -7,7 +7,7 @@ import {
   formatCity,
   formatServiceType,
   formatPrice,
-  formatPricingInterval,
+  formatPricingMode,
 } from '../../lib/format';
 import type { BranchListItem } from '../../lib/types';
 import { FavoriteButton } from './favorite-button';
@@ -66,10 +66,11 @@ export function SpaceCard({ branch, index = 0 }: SpaceCardProps) {
             {branch.startingPrice !== null && (
               <p className="text-sm font-bold text-brand-500 bg-brand-500/10 px-2.5 py-1 rounded-md">
                 {formatPrice(branch.startingPrice)}
-                <span className="text-xs font-medium text-brand-500/70">
-                  {' '}/{formatPricingInterval(branch.startingPricingInterval || 'HOURLY')}
-                  {branch.startingPricingMode === 'PER_PERSON' && ' /person'}
-                </span>
+                {branch.startingPricingMode && branch.startingPricingMode !== 'PER_BOOKING' && (
+                  <span className="text-xs font-medium text-brand-500/70">
+                    {' '}({formatPricingMode(branch.startingPricingMode)})
+                  </span>
+                )}
               </p>
             )}
           </div>

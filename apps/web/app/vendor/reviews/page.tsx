@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../components/ui/toast-provider";
-import { replyToReview, getVendorReviews } from "../../../lib/vendor";
+import { replyToReview, deleteReviewReply, getVendorReviews } from "../../../lib/vendor";
+import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 import { format } from "date-fns";
 import type { Review } from "../../../lib/types";
 
@@ -16,6 +17,7 @@ export default function VendorReviewsPage() {
     const [loading, setLoading] = useState(true);
     const [replyingTo, setReplyingTo] = useState<string | null>(null);
     const [replyText, setReplyText] = useState("");
+    const [deleteReplyTarget, setDeleteReplyTarget] = useState<string | null>(null);
 
     useEffect(() => {
         if (!token) return;
@@ -31,6 +33,18 @@ export default function VendorReviewsPage() {
             console.error(err);
         }
         setLoading(false);
+    };
+
+    const handleDeleteReply = async () => {
+        if (!deleteReplyTarget || !token) return;
+        try {
+            await deleteReviewReply(token, deleteReplyTarget);
+            setReviews((prev) => prev.map((r) => r.id === deleteReplyTarget ? { ...r, vendorReply: null, replyCreatedAt: null } : r));
+            toast("Reply deleted.", "success");
+        } catch {
+            toast("Failed to delete reply.", "error");
+        }
+        setDeleteReplyTarget(null);
     };
 
     const handleReplySubmit = async (reviewId: string) => {
@@ -108,7 +122,16 @@ export default function VendorReviewsPage() {
                                     <div className="absolute -top-3 left-4 bg-slate-100 dark:bg-dark-800 px-2 text-[10px] font-bold tracking-widest uppercase text-slate-500 dark:text-slate-400 rounded">
                                         Your Reply &bull; {review.replyCreatedAt && format(new Date(review.replyCreatedAt), "MMM d")}
                                     </div>
-                                    <p className="text-sm text-gray-900 dark:text-white">{review.vendorReply}</p>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <p className="text-sm text-gray-900 dark:text-white flex-1">{review.vendorReply}</p>
+                                        <button
+                                            onClick={() => setDeleteReplyTarget(review.id)}
+                                            className="shrink-0 text-xs font-bold text-red-500 hover:text-red-400 transition-colors"
+                                            title="Delete reply"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
@@ -155,6 +178,16 @@ export default function VendorReviewsPage() {
                     ))
                 )}
             </div>
+
+            <ConfirmDialog
+                isOpen={!!deleteReplyTarget}
+                onClose={() => setDeleteReplyTarget(null)}
+                onConfirm={handleDeleteReply}
+                title="Delete Reply"
+                message="Are you sure you want to delete your reply? This action cannot be undone."
+                confirmLabel="Delete"
+                variant="danger"
+            />
         </div>
     );
 }

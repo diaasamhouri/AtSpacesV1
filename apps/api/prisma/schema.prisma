@@ -44,14 +44,6 @@ enum ServiceType {
   EVENT_SPACE
 }
 
-enum PricingInterval {
-  HOURLY
-  HALF_DAY
-  DAILY
-  WEEKLY
-  MONTHLY
-}
-
 enum PricingMode {
   PER_BOOKING
   PER_PERSON
@@ -390,6 +382,10 @@ model Service {
   minCapacity Int? // Min capacity (for HOT_DESK/PRIVATE_OFFICE)
   isActive    Boolean     @default(true)
   isPublic    Boolean     @default(true)
+  pricePerBooking Decimal? @db.Decimal(10, 3)
+  pricePerPerson  Decimal? @db.Decimal(10, 3)
+  pricePerHour    Decimal? @db.Decimal(10, 3)
+  currency    String      @default("JOD")
   // Phase 9: Unit detail enhancements
   profileNameEn String?
   profileNameAr String?
@@ -402,7 +398,6 @@ model Service {
   updatedAt     DateTime  @updatedAt
 
   branch       Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  pricing      ServicePricing[]
   setupConfigs ServiceSetupConfig[]
   bookings     Booking[]
   quotations   Quotation[]
@@ -427,24 +422,6 @@ model ServiceSetupConfig {
   @@index([serviceId])
 }
 
-model ServicePricing {
-  id          String          @id @default(uuid())
-  serviceId   String
-  interval    PricingInterval
-  pricingMode PricingMode     @default(PER_BOOKING)
-  price       Decimal         @db.Decimal(10, 3) // JOD supports 3 decimal places (fils)
-  currency    String          @default("JOD")
-  isActive    Boolean         @default(true)
-  isPublic    Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@unique([serviceId, interval])
-  @@index([serviceId])
-}
-
 // ==================== BOOKINGS & PAYMENTS ====================
 
 model Booking {
@@ -465,7 +442,6 @@ model Booking {
   salesApproved        Boolean       @default(false)
   accountantApproved   Boolean       @default(false)
   // Financial fields
-  pricingInterval      PricingInterval?
   pricingMode          PricingMode?
   unitPrice            Decimal?      @db.Decimal(10, 3)
   subtotal             Decimal?      @db.Decimal(10, 3)
@@ -565,7 +541,6 @@ model Quotation {
   discountAmount  Decimal?        @db.Decimal(10, 3)
   taxRate         Decimal?        @db.Decimal(5, 2)
   taxAmount       Decimal?        @db.Decimal(10, 3)
-  pricingInterval PricingInterval?
   pricingMode     PricingMode?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt

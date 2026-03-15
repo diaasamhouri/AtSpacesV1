@@ -17,7 +17,7 @@ import type {
     ServiceItem,
     VendorAddOn,
 } from "../../../../../lib/types";
-import { isSetupEligible } from "../../../../../lib/types";
+import { isSetupEligible, getAvailablePricingModes, getServicePriceByMode } from "../../../../../lib/types";
 import { formatSetupType } from "../../../../../lib/format";
 
 /* ------------------------------------------------------------------ */
@@ -81,8 +81,8 @@ export default function EditVendorBookingPage() {
     const [startTime, setStartTime] = useState("");
     const [endTime, setEndTime] = useState("");
     const [numberOfPeople, setNumberOfPeople] = useState(1);
-    const [pricingInterval, setPricingInterval] = useState("");
     const [unitPrice, setUnitPrice] = useState(0);
+    const [pricingMode, setPricingMode] = useState("");
     const [setupType, setSetupType] = useState("");
     const [notes, setNotes] = useState("");
     const [addOns, setAddOns] = useState<AddOnRow[]>([]);
@@ -123,8 +123,8 @@ export default function EditVendorBookingPage() {
                 setStartTime(isoToTime(bk.startTime));
                 setEndTime(isoToTime(bk.endTime));
                 setNumberOfPeople(bk.numberOfPeople || 1);
-                setPricingInterval(bk.pricingInterval || "");
                 setUnitPrice(bk.unitPrice ?? 0);
+                setPricingMode(bk.pricingMode || "");
                 setSetupType(bk.requestedSetup || "");
                 setNotes(bk.notes || "");
                 setSubjectToTax(
@@ -180,24 +180,20 @@ export default function EditVendorBookingPage() {
         if (!svcStillValid) {
             setServiceId("");
             setSetupType("");
-            setPricingInterval("");
+            setPricingMode("");
             setUnitPrice(0);
         }
     };
 
-    // When service changes, reset dependent fields
+    // When service changes, reset dependent fields and set price from service
     const handleServiceChange = (newServiceId: string) => {
         setServiceId(newServiceId);
         setSetupType("");
-        setPricingInterval("");
-        setUnitPrice(0);
-    };
-
-    // When pricing interval changes, update unit price from catalog
-    const handlePricingChange = (interval: string) => {
-        const p = selectedService?.pricing?.find((pr) => pr.interval === interval);
-        setPricingInterval(interval);
-        setUnitPrice(p ? p.price : 0);
+        const svc = branchServices.find(s => s.id === newServiceId);
+        const modes = svc ? getAvailablePricingModes(svc) : [];
+        const defaultMode = modes[0];
+        setPricingMode(defaultMode?.mode || "");
+        setUnitPrice(defaultMode?.price || 0);
     };
 
     // Add-on helpers
@@ -244,15 +240,12 @@ export default function EditVendorBookingPage() {
 
         // Service line item
         if (unitPrice > 0 && selectedService) {
-            const pricingRecord = selectedService.pricing?.find(
-                (p) => p.interval === pricingInterval
-            );
-            const pricingMode = pricingRecord?.pricingMode || "PER_BOOKING";
+            const effectivePricingMode = pricingMode || "PER_BOOKING";
             let qty = 1;
 
-            if (pricingMode === "PER_PERSON") {
+            if (effectivePricingMode === "PER_PERSON") {
                 qty = numberOfPeople;
-            } else if (pricingMode === "PER_HOUR" && startTime && endTime) {
+            } else if (effectivePricingMode === "PER_HOUR" && startTime && endTime) {
                 const [sh, sm] = startTime.split(":").map(Number);
                 const [eh, em] = endTime.split(":").map(Number);
                 qty = Math.max(((eh! * 60 + em!) - (sh! * 60 + sm!)) / 60, 0);
@@ -301,8 +294,8 @@ export default function EditVendorBookingPage() {
         return { lineItems, subtotal, discount, discountLabel, taxRate, tax, total };
     }, [
         unitPrice,
+        pricingMode,
         selectedService,
-        pricingInterval,
         numberOfPeople,
         startTime,
         endTime,
@@ -345,7 +338,7 @@ export default function EditVendorBookingPage() {
                 startTime: startISO,
                 endTime: endISO,
                 numberOfPeople,
-                pricingInterval: pricingInterval || undefined,
+                pricingMode: pricingMode || undefined,
                 requestedSetup: setupType || undefined,
                 notes: notes || undefined,
                 addOns: addOns
@@ -569,25 +562,24 @@ export default function EditVendorBookingPage() {
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">
-                                Pricing Interval
+                                Pricing Mode
                             </label>
                             <select
-                                value={pricingInterval}
-                                onChange={(e) => handlePricingChange(e.target.value)}
-                                disabled={!selectedService}
+                                value={pricingMode}
+                                onChange={(e) => {
+                                    const mode = e.target.value;
+                                    setPricingMode(mode);
+                                    if (selectedService) {
+                                        setUnitPrice(getServicePriceByMode(selectedService, mode));
+                                    }
+                                }}
+                                disabled={!serviceId}
                                 className={selectCls}
                             >
-                                <option value="">Select</option>
-                                {(selectedService?.pricing || []).map((p) => (
-                                    <option key={p.interval} value={p.interval}>
-                                        {p.interval.toLowerCase().replace("_", " ")} (
-                                        {p.price} JOD
-                                        {p.pricingMode === "PER_PERSON"
-                                            ? "/person"
-                                            : p.pricingMode === "PER_HOUR"
-                                              ? "/hour"
-                                              : ""}
-                                        )
+                                <option value="">--</option>
+                                {(selectedService ? getAvailablePricingModes(selectedService) : []).map(m => (
+                                    <option key={m.mode} value={m.mode}>
+                                        {m.price.toFixed(3)} JOD {m.mode === 'PER_PERSON' ? '/person' : m.mode === 'PER_HOUR' ? '/hour' : '/booking'}
                                     </option>
                                 ))}
                             </select>
@@ -660,7 +652,7 @@ export default function EditVendorBookingPage() {
                             {addOns.map((ao) => (
                                 <div
                                     key={ao.id}
-                                    className="flex gap-2 items-center"
+                                    className="grid grid-cols-[1fr_80px_auto_auto] gap-3 items-center"
                                 >
                                     <select
                                         value={ao.vendorAddOnId}
@@ -670,13 +662,12 @@ export default function EditVendorBookingPage() {
                                                 e.target.value
                                             )
                                         }
-                                        className={`${selectCls} flex-1`}
+                                        className={selectCls}
                                     >
                                         <option value="">Select add-on</option>
                                         {vendorAddOns.map((a) => (
                                             <option key={a.id} value={a.id}>
-                                                {a.name} ({a.unitPrice.toFixed(3)}{" "}
-                                                JOD)
+                                                {a.name} ({a.unitPrice.toFixed(3)} JOD)
                                             </option>
                                         ))}
                                     </select>
@@ -692,16 +683,16 @@ export default function EditVendorBookingPage() {
                                                 ),
                                             })
                                         }
-                                        className={`${inputCls} w-20`}
+                                        className={inputCls}
                                         placeholder="Qty"
                                     />
-                                    <span className="text-xs text-slate-500 w-24 text-right">
+                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap min-w-[90px] text-right">
                                         {(ao.unitPrice * ao.quantity).toFixed(3)} JOD
                                     </span>
                                     <button
                                         type="button"
                                         onClick={() => removeAddOn(ao.id)}
-                                        className="text-red-400 hover:text-red-300 p-1"
+                                        className="text-red-400 hover:text-red-300 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
                                     >
                                         <svg
                                             className="h-4 w-4"
@@ -728,7 +719,7 @@ export default function EditVendorBookingPage() {
                     <button
                         type="button"
                         onClick={addAddOn}
-                        className="mt-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 px-5 py-2.5 text-sm font-bold text-slate-500 hover:border-brand-500 hover:text-brand-500 transition-colors w-full"
+                        className="mt-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 px-5 py-2.5 text-sm font-bold text-slate-500 hover:border-brand-500 hover:text-brand-500 transition-colors w-full"
                     >
                         + Add Add-On
                     </button>

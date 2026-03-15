@@ -183,6 +183,12 @@ export class VendorController {
         return this.vendorService.createBookingForCustomer(req.user.id, dto);
     }
 
+    @Get('bookings/:id')
+    @ApiOperation({ summary: 'Get a single booking by ID (vendor ownership check)' })
+    async getBookingById(@Req() req: any, @Param('id') bookingId: string) {
+        return this.vendorService.getVendorBookingById(req.user.id, bookingId);
+    }
+
     @Patch('bookings/:id')
     @ApiOperation({ summary: 'Edit a booking (PENDING, PENDING_APPROVAL, or CONFIRMED)' })
     async updateBooking(@Req() req: any, @Param('id') bookingId: string, @Body() dto: UpdateVendorBookingDto) {

@@ -12,7 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DiscountType, PricingInterval, PricingMode } from '@prisma/client';
+import { DiscountType, PricingMode } from '@prisma/client';
 
 export class QuotationLineItemDto {
   @ApiProperty()
@@ -131,11 +131,6 @@ export class CreateQuotationDto {
   @IsNumber()
   @Min(0)
   taxAmount?: number;
-
-  @ApiPropertyOptional({ enum: PricingInterval })
-  @IsOptional()
-  @IsEnum(PricingInterval)
-  pricingInterval?: PricingInterval;
 
   @ApiPropertyOptional({ enum: PricingMode })
   @IsOptional()

@@ -6,6 +6,7 @@ import { useAuth } from "../../../../lib/auth-context";
 import { getAdminServiceById, updateAdminService, deleteAdminService, getAdminBranches } from "../../../../lib/admin";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 import Link from "next/link";
+import { SERVICE_TYPE_OPTIONS, ROOM_SHAPE_OPTIONS, SETUP_TYPES as SETUP_TYPE_OPTIONS, isSetupEligible } from "../../../../lib/types";
 import type { AdminServiceDetail, AdminBranch } from "../../../../lib/types";
 
 const INPUT_CLASS =
@@ -14,40 +15,9 @@ const LABEL_CLASS = "block text-sm font-bold text-slate-700 dark:text-slate-300 
 const SELECT_CLASS =
   "block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-3 py-2.5 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors";
 
-const SERVICE_TYPES = [
-  { value: "HOT_DESK", label: "Hot Desk" },
-  { value: "PRIVATE_OFFICE", label: "Private Office" },
-  { value: "MEETING_ROOM", label: "Meeting Room" },
-  { value: "EVENT_SPACE", label: "Event Space" },
-];
-
-const ROOM_SHAPES = [
-  { value: "", label: "None" },
-  { value: "L_SHAPE", label: "L-Shape" },
-  { value: "U_SHAPE", label: "U-Shape" },
-  { value: "RECTANGLE", label: "Rectangle" },
-  { value: "SQUARE", label: "Square" },
-  { value: "OVAL", label: "Oval" },
-  { value: "CUSTOM", label: "Custom" },
-];
-
-const SETUP_TYPES = [
-  { value: "", label: "None" },
-  { value: "CLASSROOM", label: "Classroom" },
-  { value: "THEATER", label: "Theater" },
-  { value: "BOARDROOM", label: "Boardroom" },
-  { value: "U_SHAPE_SEATING", label: "U-Shape Seating" },
-  { value: "HOLLOW_SQUARE", label: "Hollow Square" },
-  { value: "BANQUET", label: "Banquet" },
-];
-
-const PRICING_INTERVALS = [
-  { value: "HOURLY", label: "Hourly" },
-  { value: "HALF_DAY", label: "Half Day" },
-  { value: "DAILY", label: "Daily" },
-  { value: "WEEKLY", label: "Weekly" },
-  { value: "MONTHLY", label: "Monthly" },
-];
+const SERVICE_TYPES = SERVICE_TYPE_OPTIONS;
+const ROOM_SHAPES = ROOM_SHAPE_OPTIONS;
+const SETUP_TYPES = SETUP_TYPE_OPTIONS;
 
 export default function AdminServiceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -66,9 +36,9 @@ export default function AdminServiceDetailPage() {
   const [form, setForm] = useState({
     name: "", type: "HOT_DESK", branchId: "", description: "",
     floor: "", profileNameEn: "", profileNameAr: "", weight: "", netSize: "",
-    shape: "", unitNumber: "", isActive: true,
+    shape: "", unitNumber: "", isActive: true, isPublic: true,
     features: [] as string[],
-    pricing: [] as { interval: string; price: string }[],
+    pricePerBooking: "", pricePerPerson: "", pricePerHour: "",
     setupConfigs: [] as { setupType: string; minPeople: number; maxPeople: number }[],
   });
   const [featureInput, setFeatureInput] = useState("");
@@ -92,8 +62,11 @@ export default function AdminServiceDetailPage() {
         shape: data.shape || "",
         unitNumber: data.unitNumber || "",
         isActive: data.isActive,
+        isPublic: data.isPublic !== false,
         features: data.features || [],
-        pricing: data.pricing.map((p) => ({ interval: p.interval, price: String(p.price) })),
+        pricePerBooking: data.pricePerBooking != null ? String(data.pricePerBooking) : "",
+        pricePerPerson: data.pricePerPerson != null ? String(data.pricePerPerson) : "",
+        pricePerHour: data.pricePerHour != null ? String(data.pricePerHour) : "",
         setupConfigs: (data.setupConfigs || []).map((sc) => ({ setupType: sc.setupType, minPeople: sc.minPeople, maxPeople: sc.maxPeople })),
       });
     } catch {
@@ -127,8 +100,11 @@ export default function AdminServiceDetailPage() {
         shape: form.shape || undefined,
         unitNumber: form.unitNumber || undefined,
         isActive: form.isActive,
+        isPublic: form.isPublic,
         features: form.features,
-        pricing: form.pricing.filter((p) => p.price).map((p) => ({ interval: p.interval, price: Number(p.price) })),
+        pricePerBooking: form.pricePerBooking ? Number(form.pricePerBooking) : null,
+        pricePerPerson: form.pricePerPerson ? Number(form.pricePerPerson) : null,
+        pricePerHour: form.pricePerHour ? Number(form.pricePerHour) : null,
         setupConfigs: form.setupConfigs.filter((sc) => sc.setupType).map((sc) => ({ setupType: sc.setupType, minPeople: Number(sc.minPeople), maxPeople: Number(sc.maxPeople) })),
       };
       const updated = await updateAdminService(token, id, body);
@@ -162,24 +138,6 @@ export default function AdminServiceDetailPage() {
 
   const removeFeature = (f: string) => {
     setForm({ ...form, features: form.features.filter((x) => x !== f) });
-  };
-
-  const addPricing = () => {
-    const usedIntervals = form.pricing.map((p) => p.interval);
-    const next = PRICING_INTERVALS.find((i) => !usedIntervals.includes(i.value));
-    if (next) {
-      setForm({ ...form, pricing: [...form.pricing, { interval: next.value, price: "" }] });
-    }
-  };
-
-  const removePricing = (idx: number) => {
-    setForm({ ...form, pricing: form.pricing.filter((_, i) => i !== idx) });
-  };
-
-  const updatePricing = (idx: number, field: "interval" | "price", value: string) => {
-    const updated = [...form.pricing];
-    updated[idx] = { ...updated[idx]!, [field]: value };
-    setForm({ ...form, pricing: updated });
   };
 
   if (loading) {
@@ -269,6 +227,13 @@ export default function AdminServiceDetailPage() {
             </label>
             <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Active</span>
           </div>
+          <div className="flex items-center gap-3">
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input type="checkbox" checked={form.isPublic} onChange={(e) => setForm({ ...form, isPublic: e.target.checked })} className="peer sr-only" />
+              <div className="h-6 w-11 rounded-full bg-slate-700 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:bg-blue-500 peer-checked:after:translate-x-full" />
+            </label>
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Public</span>
+          </div>
         </div>
       </div>
 
@@ -276,12 +241,14 @@ export default function AdminServiceDetailPage() {
       <div className="rounded-2xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-6">
         <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Room Details</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {isSetupEligible(form.type) && (
           <div>
             <label className={LABEL_CLASS}>Shape</label>
             <select value={form.shape} onChange={(e) => setForm({ ...form, shape: e.target.value })} className={SELECT_CLASS}>
               {ROOM_SHAPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
+          )}
           <div>
             <label className={LABEL_CLASS}>Floor</label>
             <input type="text" value={form.floor} onChange={(e) => setForm({ ...form, floor: e.target.value })} placeholder="e.g. Ground Floor" className={INPUT_CLASS} />
@@ -357,23 +324,23 @@ export default function AdminServiceDetailPage() {
 
       {/* Pricing */}
       <div className="rounded-2xl bg-white dark:bg-dark-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pricing</h2>
-          <button onClick={addPricing} disabled={form.pricing.length >= PRICING_INTERVALS.length}
-            className="text-xs font-bold text-brand-500 hover:text-brand-400 disabled:opacity-30 transition-colors">+ Add Interval</button>
-        </div>
-        <div className="space-y-3">
-          {form.pricing.map((p, idx) => (
-            <div key={idx} className="flex items-center gap-3">
-              <select value={p.interval} onChange={(e) => updatePricing(idx, "interval", e.target.value)} className={`!w-40 shrink-0 ${SELECT_CLASS}`}>
-                {PRICING_INTERVALS.map((i) => <option key={i.value} value={i.value}>{i.label}</option>)}
-              </select>
-              <input type="number" step="0.01" value={p.price} onChange={(e) => updatePricing(idx, "price", e.target.value)}
-                placeholder="Price (JOD)" className={`flex-1 ${INPUT_CLASS}`} />
-              <button onClick={() => removePricing(idx)} className="text-red-500 hover:text-red-400 text-sm font-bold transition-colors">Remove</button>
-            </div>
-          ))}
-          {form.pricing.length === 0 && <p className="text-sm text-slate-500">No pricing set. Add at least one interval.</p>}
+        <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pricing <span className="normal-case font-normal text-slate-500">(at least one required)</span></h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div>
+            <label className={LABEL_CLASS}>Per Booking (JOD)</label>
+            <input type="number" step="0.001" min="0" value={form.pricePerBooking} onChange={(e) => setForm({ ...form, pricePerBooking: e.target.value })}
+              placeholder="0.000" className={INPUT_CLASS} />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>Per Person (JOD)</label>
+            <input type="number" step="0.001" min="0" value={form.pricePerPerson} onChange={(e) => setForm({ ...form, pricePerPerson: e.target.value })}
+              placeholder="0.000" className={INPUT_CLASS} />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>Per Hour (JOD)</label>
+            <input type="number" step="0.001" min="0" value={form.pricePerHour} onChange={(e) => setForm({ ...form, pricePerHour: e.target.value })}
+              placeholder="0.000" className={INPUT_CLASS} />
+          </div>
         </div>
       </div>
 

@@ -6,15 +6,14 @@ import { createBooking, checkAvailability, verifyPromoCode } from "../../lib/boo
 import {
   formatServiceType,
   formatPrice,
-  formatPricingInterval,
   formatPricingMode,
   formatPaymentMethod,
 } from "../../lib/format";
-import { isSetupEligible } from "../../lib/types";
+import { isSetupEligible, getAvailablePricingModes, getServicePriceByMode } from "../../lib/types";
 import type {
   ServiceItem,
-  PricingInterval,
   PaymentMethod,
+  PricingMode,
   Booking,
   AvailabilityResponse,
 } from "../../lib/types";
@@ -97,8 +96,7 @@ export function BookingModal({
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(
     null,
   );
-  const [selectedInterval, setSelectedInterval] =
-    useState<PricingInterval | null>(null);
+  const [selectedPricingMode, setSelectedPricingMode] = useState<PricingMode | null>(null);
 
   // Step 2: Schedule
   const [date, setDate] = useState("");
@@ -130,7 +128,7 @@ export function BookingModal({
     if (isOpen) {
       setStep("service");
       setSelectedService(null);
-      setSelectedInterval(null);
+      setSelectedPricingMode(null);
       setDate("");
       setStartHour("09:00");
       setEndHour("");
@@ -151,51 +149,24 @@ export function BookingModal({
     }
   }, [isOpen]);
 
-  // Duration hours map per interval
-  const INTERVAL_HOURS: Record<PricingInterval, number> = {
-    HOURLY: 1,
-    HALF_DAY: 4,
-    DAILY: 8,
-    WEEKLY: 8 * 5,
-    MONTHLY: 8 * 22,
-  };
-
-  // Auto-compute endHour when startHour or interval changes (unless manually overridden)
+  // Auto-compute endHour when startHour changes (default +1h, unless manually overridden)
   useEffect(() => {
-    if (!selectedInterval || !startHour || endHourManual) return;
+    if (!selectedService || !startHour || endHourManual) return;
     const [hh, mm] = startHour.split(":").map(Number);
     if (hh === undefined || mm === undefined) return;
-    const totalMinutes = hh * 60 + mm + INTERVAL_HOURS[selectedInterval] * 60;
+    const defaultHours = selectedPricingMode === 'PER_HOUR' ? 1 : 8;
+    const totalMinutes = hh * 60 + mm + defaultHours * 60;
     const endH = Math.floor(totalMinutes / 60) % 24;
     const endM = totalMinutes % 60;
     setEndHour(`${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startHour, selectedInterval, endHourManual]);
-
-  // Compute end time based on interval (for ISO)
-  const computeEndTime = useCallback(
-    (startIso: string, interval: PricingInterval): string => {
-      const start = new Date(startIso);
-      start.setHours(start.getHours() + INTERVAL_HOURS[interval]);
-      return start.toISOString();
-    },
-    [],
-  );
-
-  const selectedPricing =
-    selectedService && selectedInterval
-      ? selectedService.pricing.find((p) => p.interval === selectedInterval)
-      : null;
+  }, [startHour, selectedService, selectedPricingMode, endHourManual]);
 
   const startTimeIso =
     date && startHour ? new Date(`${date}T${startHour}:00`).toISOString() : "";
-  // Use manual endHour if set, otherwise compute from interval
   const endTimeIso = (() => {
     if (date && endHour) {
       return new Date(`${date}T${endHour}:00`).toISOString();
-    }
-    if (startTimeIso && selectedInterval) {
-      return computeEndTime(startTimeIso, selectedInterval);
     }
     return "";
   })();
@@ -240,7 +211,7 @@ export function BookingModal({
 
   // Auto-trigger availability check with debounce
   useEffect(() => {
-    if (step !== "schedule" || !selectedService || !date || !startHour || !selectedInterval) return;
+    if (step !== "schedule" || !selectedService || !date || !startHour) return;
     // Clear previous state immediately
     setIsAvailable(null);
     setAvailabilityMsg("");
@@ -255,7 +226,7 @@ export function BookingModal({
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, startHour, numberOfPeople, selectedService?.id, selectedInterval, step]);
+  }, [date, startHour, numberOfPeople, selectedService?.id, step]);
 
   async function handleVerifyPromo() {
     if (!promoCode || !selectedService) return;
@@ -279,7 +250,7 @@ export function BookingModal({
   const requiresCardDetails = paymentMethod === "VISA" || paymentMethod === "MASTERCARD" || paymentMethod === "APPLE_PAY";
 
   async function handleConfirmBooking() {
-    if (!token || !selectedService || !selectedInterval || !selectedPricing)
+    if (!token || !selectedService)
       return;
     setLoading(true);
     setError("");
@@ -289,8 +260,8 @@ export function BookingModal({
         startTime: startTimeIso,
         endTime: endTimeIso,
         numberOfPeople,
-        pricingInterval: selectedInterval,
         paymentMethod,
+        pricingMode: selectedPricingMode || undefined,
         notes: notes || undefined,
         promoCode: promoCode || undefined,
         requestedSetup: requestedSetup || undefined,
@@ -397,7 +368,8 @@ export function BookingModal({
                   }`}
                 onClick={() => {
                   setSelectedService(service);
-                  setSelectedInterval(null);
+                  const modes = getAvailablePricingModes(service);
+                  setSelectedPricingMode(modes[0]?.mode ?? null);
                 }}
               >
                 <div className="flex items-center justify-between">
@@ -428,43 +400,50 @@ export function BookingModal({
                   )}
                 </div>
 
-                {/* Pricing options */}
-                {selectedService?.id === service.id && (
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {service.pricing.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedInterval(p.interval);
-                        }}
-                        className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${selectedInterval === p.interval
-                          ? "bg-brand-500 text-white"
-                          : "bg-white dark:bg-dark-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-dark-700"
-                          }`}
-                      >
-                        <span className="block text-xs capitalize opacity-80">
-                          Per {formatPricingInterval(p.interval)}
-                        </span>
-                        <span className="font-semibold">
-                          {formatPrice(p.price, p.currency)}
-                        </span>
-                        {p.pricingMode && p.pricingMode !== 'PER_BOOKING' && (
-                          <span className="block text-[10px] opacity-70 mt-0.5">
-                            {formatPricingMode(p.pricingMode)}
+                {/* Pricing display */}
+                {selectedService?.id === service.id && (() => {
+                  const modes = getAvailablePricingModes(service);
+                  return (
+                    <div className="mt-3 space-y-2">
+                      {modes.length > 1 ? (
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                            Pricing mode
+                          </label>
+                          <select
+                            value={selectedPricingMode || ''}
+                            onChange={(e) => setSelectedPricingMode(e.target.value as PricingMode)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
+                          >
+                            {modes.map((m) => (
+                              <option key={m.mode} value={m.mode}>
+                                {formatPrice(m.price, service.currency || 'JOD')} — {formatPricingMode(m.mode)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : modes.length === 1 ? (
+                        <div className="rounded-lg bg-brand-500/10 px-3 py-2 text-sm">
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {formatPrice(modes[0]!.price, service.currency || 'JOD')}
                           </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                          {modes[0]!.mode !== 'PER_BOOKING' && (
+                            <span className="ml-1 text-xs text-slate-500">
+                              ({formatPricingMode(modes[0]!.mode)})
+                            </span>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
 
             <button
               type="button"
-              disabled={!selectedService || !selectedInterval}
+              disabled={!selectedService}
               onClick={() => setStep("schedule")}
               className="w-full rounded-lg bg-brand-500 active:scale-95 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-brand-600  disabled:opacity-50"
             >
@@ -574,9 +553,9 @@ export function BookingModal({
                   }}
                   className="mt-1 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-4 py-3 text-sm text-gray-900 dark:text-white focus:border-brand-500 focus:ring-brand-500"
                 />
-                {!endHourManual && selectedInterval && (
+                {!endHourManual && selectedService && (
                   <p className="mt-1 text-xs text-slate-500">
-                    Auto-calculated from {selectedInterval.toLowerCase().replace("_", " ")} interval
+                    Auto-calculated
                   </p>
                 )}
               </div>
@@ -724,7 +703,7 @@ export function BookingModal({
         )}
 
         {/* Step 3: Review & Confirm */}
-        {step === "review" && selectedPricing && selectedService && (
+        {step === "review" && selectedService && (
           <div className="mt-6 space-y-4">
             <p className="text-sm text-slate-500 dark:text-slate-400">
               Review your booking details
@@ -753,36 +732,32 @@ export function BookingModal({
                   <span className="font-medium text-gray-900 dark:text-white">{startHour} - {endHour || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Duration</span>
-                  <span className="font-medium text-gray-900 dark:text-white">Per {formatPricingInterval(selectedInterval!)}</span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-slate-500 dark:text-slate-400">People</span>
                   <span className="font-medium text-gray-900 dark:text-white">{numberOfPeople}</span>
                 </div>
-                {selectedPricing?.pricingMode && selectedPricing.pricingMode !== 'PER_BOOKING' && (
+                {selectedPricingMode && selectedPricingMode !== 'PER_BOOKING' && (
                   <div className="flex justify-between">
                     <span className="text-slate-500 dark:text-slate-400">Pricing</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{formatPricingMode(selectedPricing.pricingMode)}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{formatPricingMode(selectedPricingMode)}</span>
                   </div>
                 )}
                 <hr className="border-slate-200 dark:border-slate-700" />
                 {(() => {
-                  if (!selectedPricing) return null;
-                  const unitPrice = Number(selectedPricing.price);
-                  const mode = selectedPricing.pricingMode || 'PER_BOOKING';
+                  const mode = selectedPricingMode || 'PER_BOOKING';
+                  const unitPrice = getServicePriceByMode(selectedService, mode);
+                  const currency = selectedService.currency || 'JOD';
                   let estimatedSubtotal = unitPrice;
                   let breakdownLabel = '';
 
                   if (mode === 'PER_PERSON') {
                     estimatedSubtotal = unitPrice * numberOfPeople;
-                    breakdownLabel = `${formatPrice(unitPrice, selectedPricing.currency)} × ${numberOfPeople} ${numberOfPeople === 1 ? 'person' : 'people'}`;
+                    breakdownLabel = `${formatPrice(unitPrice, currency)} x ${numberOfPeople} ${numberOfPeople === 1 ? 'person' : 'people'}`;
                   } else if (mode === 'PER_HOUR' && startHour && endHour) {
                     const [sh, sm] = startHour.split(':').map(Number);
                     const [eh, em] = endHour.split(':').map(Number);
                     const hours = Math.max(((eh! * 60 + em!) - (sh! * 60 + sm!)) / 60, 0);
                     estimatedSubtotal = unitPrice * hours;
-                    breakdownLabel = `${formatPrice(unitPrice, selectedPricing.currency)} × ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+                    breakdownLabel = `${formatPrice(unitPrice, currency)} x ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
                   }
 
                   const finalTotal = promoDiscount !== null
@@ -798,11 +773,11 @@ export function BookingModal({
                         )}
                         {promoDiscount !== null && (
                           <div className="text-sm line-through text-slate-500">
-                            {formatPrice(estimatedSubtotal, selectedPricing.currency)}
+                            {formatPrice(estimatedSubtotal, currency)}
                           </div>
                         )}
                         <span className="text-brand-500">
-                          {formatPrice(finalTotal, selectedPricing.currency)}
+                          {formatPrice(finalTotal, currency)}
                         </span>
                       </div>
                     </div>

@@ -69,9 +69,6 @@ describe('VendorService', () => {
       aggregate: jest.fn(),
       update: jest.fn(),
     },
-    servicePricing: {
-      findFirst: jest.fn(),
-    },
     bookingAddOn: {
       deleteMany: jest.fn(),
       create: jest.fn(),
@@ -635,7 +632,6 @@ describe('VendorService', () => {
       currency: 'JOD',
       notes: null,
       requestedSetup: null,
-      pricingInterval: 'HOURLY',
       pricingMode: 'PER_BOOKING',
       unitPrice: new Decimal(25),
       subtotal: new Decimal(25),
@@ -661,7 +657,6 @@ describe('VendorService', () => {
         branchId: 'branch-1',
         isActive: true,
         capacity: 10,
-        pricing: [{ id: 'sp-1', interval: 'HOURLY', price: new Decimal(25), pricingMode: 'PER_BOOKING', isActive: true }],
       },
       payment: null,
       addOns: [],
@@ -676,12 +671,11 @@ describe('VendorService', () => {
       const booking = { ...baseMockBooking, ...bookingOverrides };
       mockPrismaService.vendorProfile.findUnique.mockResolvedValue(approvedVendorProfile);
       mockPrismaService.booking.findUnique.mockResolvedValue(booking);
-      mockPrismaService.servicePricing.findFirst.mockResolvedValue({
-        id: 'sp-1',
-        interval: 'HOURLY',
-        price: new Decimal(25),
-        pricingMode: 'PER_BOOKING',
-        isActive: true,
+      mockPrismaService.service.findUnique.mockResolvedValue({
+        id: 'service-1',
+        pricePerBooking: new Decimal(25),
+        pricePerPerson: null,
+        pricePerHour: null,
       });
       mockPrismaService.booking.count.mockResolvedValue(0);
       // booking.update returns the updated booking (with user, payment, addOns)
@@ -792,13 +786,12 @@ describe('VendorService', () => {
     it('should recalculate with PER_PERSON mode when numberOfPeople changes', async () => {
       setupUpdateMocks();
 
-      // Override servicePricing to return PER_PERSON mode
-      mockPrismaService.servicePricing.findFirst.mockResolvedValue({
-        id: 'sp-1',
-        interval: 'HOURLY',
-        price: new Decimal(15),
-        pricingMode: 'PER_PERSON',
-        isActive: true,
+      // Override service to return PER_PERSON mode
+      mockPrismaService.service.findUnique.mockResolvedValue({
+        id: 'service-1',
+        pricePerBooking: null,
+        pricePerPerson: new Decimal(15),
+        pricePerHour: null,
       });
 
       const dto = {
@@ -858,12 +851,11 @@ describe('VendorService', () => {
       };
       mockPrismaService.vendorProfile.findUnique.mockResolvedValue(approvedVendorProfile);
       mockPrismaService.booking.findUnique.mockResolvedValue(bookingWithPayment);
-      mockPrismaService.servicePricing.findFirst.mockResolvedValue({
-        id: 'sp-1',
-        interval: 'HOURLY',
-        price: new Decimal(25),
-        pricingMode: 'PER_BOOKING',
-        isActive: true,
+      mockPrismaService.service.findUnique.mockResolvedValue({
+        id: 'service-1',
+        pricePerBooking: new Decimal(25),
+        pricePerPerson: null,
+        pricePerHour: null,
       });
       mockPrismaService.booking.count.mockResolvedValue(0);
       // booking.update returns the updated booking with payment still PENDING

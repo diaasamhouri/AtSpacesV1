@@ -26,8 +26,9 @@ export class ServicesService {
             throw new NotFoundException('Branch not found');
         }
 
-        if (!dto.pricing || dto.pricing.length === 0) {
-            throw new BadRequestException('At least one pricing interval must be provided');
+        // At least one price must be set
+        if (dto.pricePerBooking == null && dto.pricePerPerson == null && dto.pricePerHour == null) {
+            throw new BadRequestException('At least one pricing field must be set (pricePerBooking, pricePerPerson, or pricePerHour)');
         }
 
         // Setup configs only apply to MEETING_ROOM and EVENT_SPACE
@@ -60,15 +61,9 @@ export class ServicesService {
                 shape: dto.shape,
                 features: dto.features,
                 isPublic: dto.isPublic ?? true,
-                pricing: {
-                    create: dto.pricing.map((p) => ({
-                        interval: p.interval,
-                        pricingMode: p.pricingMode ?? 'PER_BOOKING',
-                        price: p.price,
-                        isActive: p.isActive ?? true,
-                        isPublic: p.isPublic ?? true,
-                    })),
-                },
+                pricePerBooking: dto.pricePerBooking,
+                pricePerPerson: dto.pricePerPerson,
+                pricePerHour: dto.pricePerHour,
                 setupConfigs: dto.setupConfigs && dto.setupConfigs.length > 0 ? {
                     create: dto.setupConfigs.map((c) => ({
                         setupType: c.setupType,
@@ -77,7 +72,7 @@ export class ServicesService {
                     })),
                 } : undefined,
             },
-            include: { pricing: true, setupConfigs: true },
+            include: { setupConfigs: true },
         });
     }
 
@@ -129,28 +124,10 @@ export class ServicesService {
             netSize: dto.netSize,
             shape: dto.shape,
             features: dto.features,
+            pricePerBooking: dto.pricePerBooking,
+            pricePerPerson: dto.pricePerPerson,
+            pricePerHour: dto.pricePerHour,
         };
-
-        // If pricing is provided, delete old and recreate
-        if (dto.pricing) {
-            if (dto.pricing.length === 0) {
-                throw new BadRequestException('At least one pricing interval must be provided');
-            }
-
-            await this.prisma.$transaction([
-                this.prisma.servicePricing.deleteMany({ where: { serviceId } }),
-                this.prisma.servicePricing.createMany({
-                    data: dto.pricing.map((p) => ({
-                        serviceId,
-                        interval: p.interval,
-                        pricingMode: p.pricingMode ?? 'PER_BOOKING',
-                        price: p.price,
-                        isActive: p.isActive ?? true,
-                        isPublic: p.isPublic ?? true,
-                    })),
-                }),
-            ]);
-        }
 
         // If setupConfigs is provided, delete old and recreate
         if (dto.setupConfigs) {
@@ -172,7 +149,7 @@ export class ServicesService {
         return this.prisma.service.update({
             where: { id: serviceId },
             data: updateData,
-            include: { pricing: true, setupConfigs: true },
+            include: { setupConfigs: true },
         });
     }
 

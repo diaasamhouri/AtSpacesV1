@@ -4,30 +4,19 @@ import {
     UseInterceptors,
     UploadedFile,
     BadRequestException,
-    Get,
-    Param,
-    Res,
     UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
-import { basename, extname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
-import type { Response } from 'express';
-import { v4 as uuid } from 'uuid';
-
-const UPLOAD_DIR = join(process.cwd(), 'uploads');
-
-// Ensure uploads directory exists
-if (!existsSync(UPLOAD_DIR)) {
-    mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+import { StorageService } from '../storage/storage.service';
 
 @ApiTags('Uploads')
 @Controller('uploads')
 export class UploadsController {
+    constructor(private readonly storage: StorageService) {}
+
     @Post()
     @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: 'Upload a file (images only)' })
@@ -42,14 +31,8 @@ export class UploadsController {
     })
     @UseInterceptors(
         FileInterceptor('file', {
-            storage: diskStorage({
-                destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-                filename: (_req, file, cb) => {
-                    const uniqueName = `${uuid()}${extname(file.originalname)}`;
-                    cb(null, uniqueName);
-                },
-            }),
-            limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+            storage: memoryStorage(),
+            limits: { fileSize: 10 * 1024 * 1024 },
             fileFilter: (_req, file, cb) => {
                 if (!file.mimetype.startsWith('image/')) {
                     return cb(
@@ -61,29 +44,16 @@ export class UploadsController {
             },
         }),
     )
-    uploadFile(@UploadedFile() file: Express.Multer.File) {
+    async uploadFile(@UploadedFile() file: Express.Multer.File) {
         if (!file) {
             throw new BadRequestException('No file provided');
         }
+        const result = await this.storage.upload(file);
         return {
-            url: `/uploads/${file.filename}`,
-            filename: file.filename,
+            url: result.url,
+            filename: result.key,
             originalName: file.originalname,
             size: file.size,
         };
-    }
-
-    @Get(':filename')
-    @ApiOperation({ summary: 'Serve an uploaded file' })
-    serveFile(@Param('filename') filename: string, @Res() res: Response) {
-        const safeName = basename(filename);
-        if (safeName !== filename || safeName.includes('..')) {
-            throw new BadRequestException('Invalid filename');
-        }
-        const filePath = join(UPLOAD_DIR, safeName);
-        if (!existsSync(filePath)) {
-            throw new BadRequestException('File not found');
-        }
-        return res.sendFile(filePath);
     }
 }

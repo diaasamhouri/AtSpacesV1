@@ -32,21 +32,10 @@ export class BookingsService {
       throw new BadRequestException('End time must be after start time');
     }
 
-    // Enforce half-day = 4 hours
-    if (dto.pricingInterval === 'HALF_DAY') {
-      const diffMs = endTime.getTime() - startTime.getTime();
-      const fourHoursMs = 4 * 60 * 60 * 1000;
-      if (Math.abs(diffMs - fourHoursMs) > 60000) {
-        // Auto-correct endTime to startTime + 4 hours
-        endTime = new Date(startTime.getTime() + fourHoursMs);
-      }
-    }
-
-    // Fetch service with pricing
+    // Fetch service
     const service = await this.prisma.service.findUnique({
       where: { id: dto.serviceId },
       include: {
-        pricing: { where: { isActive: true, isPublic: true } },
         branch: { select: { id: true, status: true, vendorProfileId: true, autoAcceptBookings: true, operatingHours: true } },
       },
     });
@@ -57,16 +46,6 @@ export class BookingsService {
 
     if (service.branch.status !== 'ACTIVE') {
       throw new BadRequestException('Branch is not currently active');
-    }
-
-    // Find the matching pricing interval
-    const pricing = service.pricing.find(
-      (p) => p.interval === dto.pricingInterval,
-    );
-    if (!pricing) {
-      throw new BadRequestException(
-        `No pricing available for interval: ${dto.pricingInterval}`,
-      );
     }
 
     // Reject requestedSetup for non-eligible service types
@@ -124,9 +103,8 @@ export class BookingsService {
         service.capacity ?? 0, 'No availability for the selected time slot',
       );
 
-      // Calculate financial breakdown
-      const unitPrice = pricing.price.toNumber();
-      const pricingMode = pricing.pricingMode || 'PER_BOOKING';
+      // Calculate financial breakdown using new multi-price columns
+      const { unitPrice, pricingMode } = this.getServicePrice(service);
       const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
       const subtotal = calculateSubtotal(unitPrice, pricingMode, dto.numberOfPeople, durationHours);
 
@@ -173,7 +151,6 @@ export class BookingsService {
           endTime,
           numberOfPeople: dto.numberOfPeople,
           totalPrice,
-          pricingInterval: dto.pricingInterval,
           pricingMode: pricingMode as any,
           unitPrice,
           subtotal,
@@ -784,7 +761,6 @@ export class BookingsService {
       where,
       include: {
         branch: { select: { id: true, name: true } },
-        pricing: { where: { isActive: true, isPublic: true }, select: { interval: true, pricingMode: true, price: true, currency: true } },
         setupConfigs: { select: { setupType: true, minPeople: true, maxPeople: true } },
       },
       orderBy: { name: 'asc' },
@@ -876,12 +852,10 @@ export class BookingsService {
         branchId: service.branch.id,
         available: worstRemaining > 0,
         remainingSpots: Math.max(0, worstRemaining),
-        pricing: service.pricing.map(p => ({
-          interval: p.interval,
-          pricingMode: p.pricingMode,
-          price: p.price.toNumber(),
-          currency: p.currency,
-        })),
+        pricePerBooking: service.pricePerBooking ? Number(service.pricePerBooking) : null,
+        pricePerPerson: service.pricePerPerson ? Number(service.pricePerPerson) : null,
+        pricePerHour: service.pricePerHour ? Number(service.pricePerHour) : null,
+        currency: service.currency,
         setupConfigs: SETUP_ELIGIBLE_TYPES.includes(service.type)
           ? service.setupConfigs.map(c => ({
               setupType: c.setupType,
@@ -895,6 +869,21 @@ export class BookingsService {
     return results;
   }
 
+  private getServicePrice(service: any, requestedMode?: string): { unitPrice: number; pricingMode: string } {
+    const prices: Record<string, number | null> = {
+      PER_BOOKING: service.pricePerBooking ? Number(service.pricePerBooking) : null,
+      PER_PERSON: service.pricePerPerson ? Number(service.pricePerPerson) : null,
+      PER_HOUR: service.pricePerHour ? Number(service.pricePerHour) : null,
+    };
+    if (requestedMode && prices[requestedMode] != null) {
+      return { unitPrice: prices[requestedMode]!, pricingMode: requestedMode };
+    }
+    for (const [mode, price] of Object.entries(prices)) {
+      if (price != null) return { unitPrice: price, pricingMode: mode };
+    }
+    throw new BadRequestException('Service has no pricing configured');
+  }
+
   private serializeBooking(booking: any) {
     return {
       id: booking.id,
@@ -906,7 +895,6 @@ export class BookingsService {
       currency: booking.currency,
       notes: booking.notes,
       requestedSetup: booking.requestedSetup ?? null,
-      pricingInterval: booking.pricingInterval ?? null,
       pricingMode: booking.pricingMode ?? null,
       unitPrice: booking.unitPrice ? booking.unitPrice.toNumber() : null,
       subtotal: booking.subtotal ? booking.subtotal.toNumber() : null,

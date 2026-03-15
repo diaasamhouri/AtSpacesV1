@@ -7,6 +7,7 @@ import { useToast } from "../../../components/ui/toast-provider";
 import { createQuotation } from "../../../../lib/quotations";
 import { getVendorBranches, searchVendorCustomers, getVendorAddOns } from "../../../../lib/vendor";
 import type { VendorBranchDetail, ServiceItem, CustomerSearchResult, VendorAddOn } from "../../../../lib/types";
+import { getAvailablePricingModes, getServicePriceByMode } from "../../../../lib/types";
 
 interface DateEntry {
     date: string;
@@ -50,6 +51,7 @@ export default function NewQuotationPage() {
     const [branchId, setBranchId] = useState(qBranchId);
     const [serviceId, setServiceId] = useState("");
     const [pendingServiceId, setPendingServiceId] = useState(qServiceId);
+    const [selectedPricingMode, setSelectedPricingMode] = useState("");
     const [notes, setNotes] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -86,34 +88,18 @@ export default function NewQuotationPage() {
     const [vendorAddOns, setVendorAddOns] = useState<VendorAddOn[]>([]);
     const [selectedAddOns, setSelectedAddOns] = useState<{ vendorAddOnId: string; quantity: number; serviceTime?: string; comments?: string }[]>([]);
 
-    // Pricing type for auto-calculation
-    const [pricingInterval, setPricingInterval] = useState("");
-
     // Selected service details
     const selectedService = useMemo(
         () => services.find((s) => s.id === serviceId),
         [services, serviceId],
     );
 
-    // Get available pricing options for selected service
-    const pricingOptions = useMemo(
-        () => selectedService?.pricing || [],
-        [selectedService],
-    );
-
-    // Auto-set pricing interval when service changes
-    useEffect(() => {
-        if (pricingOptions.length > 0 && !pricingOptions.find((p) => p.interval === pricingInterval)) {
-            setPricingInterval(pricingOptions[0]!.interval);
-        }
-    }, [pricingOptions, pricingInterval]);
-
     // Auto-calculate total amount
     const calculatedTotal = useMemo(() => {
-        if (!selectedService || !pricingInterval) return null;
+        if (!selectedService || !selectedPricingMode) return null;
 
-        const pricing = pricingOptions.find((p) => p.interval === pricingInterval);
-        if (!pricing) return null;
+        const unitPrice = getServicePriceByMode(selectedService, selectedPricingMode);
+        const pricingMode = selectedPricingMode || "PER_BOOKING";
 
         let total = 0;
         const breakdown: { date: string; subtotal: number; hours: number; people: number }[] = [];
@@ -126,23 +112,15 @@ export default function NewQuotationPage() {
             const hours = Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60));
             const people = entry.numberOfPeople;
 
-            let dayTotal = 0;
-            switch (pricingInterval) {
-                case "HOURLY":
-                    dayTotal = hours * pricing.price;
-                    break;
-                case "HALF_DAY":
-                case "DAILY":
-                case "WEEKLY":
-                case "MONTHLY":
-                    dayTotal = pricing.price;
-                    break;
-                default:
-                    dayTotal = pricing.price;
+            let dayTotal = unitPrice;
+
+            // Multiply by hours if pricing mode is PER_HOUR
+            if (pricingMode === "PER_HOUR") {
+                dayTotal = hours * unitPrice;
             }
 
             // Multiply by people if pricing mode is PER_PERSON
-            if (pricing.pricingMode === "PER_PERSON") {
+            if (pricingMode === "PER_PERSON") {
                 dayTotal = dayTotal * people;
             }
 
@@ -150,8 +128,8 @@ export default function NewQuotationPage() {
             total += dayTotal;
         }
 
-        return { total: Math.round(total * 1000) / 1000, breakdown, unitPrice: pricing.price };
-    }, [selectedService, pricingInterval, pricingOptions, dateEntries]);
+        return { total: Math.round(total * 1000) / 1000, breakdown, unitPrice };
+    }, [selectedService, selectedPricingMode, dateEntries]);
 
     const [totalAmountOverride, setTotalAmountOverride] = useState("");
 
@@ -194,9 +172,13 @@ export default function NewQuotationPage() {
         // Deferred serviceId pre-fill
         if (pendingServiceId && branchServices.some((s) => s.id === pendingServiceId)) {
             setServiceId(pendingServiceId);
+            const svc = branchServices.find(s => s.id === pendingServiceId);
+            const modes = svc ? getAvailablePricingModes(svc) : [];
+            setSelectedPricingMode(modes[0]?.mode || "");
             setPendingServiceId("");
         } else if (!pendingServiceId) {
             setServiceId("");
+            setSelectedPricingMode("");
         }
     }, [branchId, branches, pendingServiceId]);
 
@@ -327,7 +309,6 @@ export default function NewQuotationPage() {
 
         setSubmitting(true);
         try {
-            const selectedPricing = pricingOptions.find((p) => p.interval === pricingInterval);
             await createQuotation(token!, {
                 customerId,
                 branchId,
@@ -338,8 +319,7 @@ export default function NewQuotationPage() {
                 totalAmount: effectiveTotal,
                 notes: notes || undefined,
                 subtotal: effectiveTotal,
-                pricingInterval: pricingInterval || undefined,
-                pricingMode: selectedPricing?.pricingMode || undefined,
+                pricingMode: selectedPricingMode || undefined,
                 lineItems: dateEntries.length > 1 ? lineItems : undefined,
                 addOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
             });
@@ -469,7 +449,14 @@ export default function NewQuotationPage() {
                             </label>
                             <select
                                 value={serviceId}
-                                onChange={(e) => { setServiceId(e.target.value); setTotalAmountOverride(""); }}
+                                onChange={(e) => {
+                                    const newSvcId = e.target.value;
+                                    setServiceId(newSvcId);
+                                    setTotalAmountOverride("");
+                                    const svc = services.find(s => s.id === newSvcId);
+                                    const modes = svc ? getAvailablePricingModes(svc) : [];
+                                    setSelectedPricingMode(modes[0]?.mode || "");
+                                }}
                                 required
                                 disabled={!branchId}
                                 className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors disabled:opacity-50"
@@ -661,26 +648,26 @@ export default function NewQuotationPage() {
                 <div className="rounded-2xl bg-white dark:bg-dark-900 p-6 shadow-float border border-slate-200 dark:border-slate-800 space-y-6">
                     <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Pricing</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Pricing interval */}
+                        {/* Pricing mode selector */}
                         <div>
                             <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">
-                                Pricing Type
+                                Pricing Mode
                             </label>
                             <select
-                                value={pricingInterval}
-                                onChange={(e) => { setPricingInterval(e.target.value); setTotalAmountOverride(""); }}
-                                disabled={pricingOptions.length === 0}
+                                value={selectedPricingMode}
+                                onChange={(e) => {
+                                    setSelectedPricingMode(e.target.value);
+                                    setTotalAmountOverride("");
+                                }}
+                                disabled={!serviceId}
                                 className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors disabled:opacity-50"
                             >
-                                <option value="">{pricingOptions.length > 0 ? "Select pricing" : "Select a service first"}</option>
-                                {pricingOptions.map((p) => {
-                                    const modeLabel = p.pricingMode === "PER_PERSON" ? "Per Person" : p.pricingMode === "PER_HOUR" ? "Per Hour" : "Per Booking";
-                                    return (
-                                        <option key={p.interval} value={p.interval}>
-                                            {modeLabel} — {p.price} {p.currency || "JOD"}
-                                        </option>
-                                    );
-                                })}
+                                <option value="">{serviceId ? "Select pricing mode" : "Select a service first"}</option>
+                                {(selectedService ? getAvailablePricingModes(selectedService) : []).map(m => (
+                                    <option key={m.mode} value={m.mode}>
+                                        {m.price.toFixed(3)} {selectedService?.currency || "JOD"} {m.mode === 'PER_PERSON' ? '/ person' : m.mode === 'PER_HOUR' ? '/ hour' : '/ booking'}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 
@@ -719,7 +706,7 @@ export default function NewQuotationPage() {
                                 Unit Rate
                             </label>
                             <div className="px-4 py-2.5 bg-slate-50 dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white">
-                                {calculatedTotal ? `${calculatedTotal.unitPrice} JOD / ${pricingInterval.toLowerCase().replace(/_/g, " ")}` : "—"}
+                                {calculatedTotal ? `${calculatedTotal.unitPrice} JOD` : "—"}
                             </div>
                         </div>
                     </div>

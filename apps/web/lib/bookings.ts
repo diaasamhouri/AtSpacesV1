@@ -2,7 +2,6 @@ import type {
   Booking,
   BookingListResponse,
   AvailabilityResponse,
-  PricingInterval,
   PaymentMethod,
 } from './types';
 import { apiFetch } from './api';
@@ -12,8 +11,8 @@ export interface CreateBookingData {
   startTime: string;
   endTime: string;
   numberOfPeople: number;
-  pricingInterval: PricingInterval;
   paymentMethod: PaymentMethod;
+  pricingMode?: string;
   notes?: string;
   promoCode?: string;
   requestedSetup?: string;

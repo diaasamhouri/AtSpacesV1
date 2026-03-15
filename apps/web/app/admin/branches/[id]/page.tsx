@@ -6,7 +6,8 @@ import { useAuth } from "../../../../lib/auth-context";
 import { useToast } from "../../../components/ui/toast-provider";
 import { getAdminBranchById, updateBranchStatus } from "../../../../lib/admin";
 import { format } from "date-fns";
-import { formatCity, formatServiceType, formatPricingInterval } from "../../../../lib/format";
+import { formatCity, formatServiceType, formatPricingMode } from "../../../../lib/format";
+import { getAvailablePricingModes } from "../../../../lib/types";
 import StatusBadge from "../../../components/ui/status-badge";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 import Link from "next/link";
@@ -164,10 +165,12 @@ export default function AdminBranchDetailPage() {
                                     <span className="text-xs text-slate-500 font-medium">Cap: {svc.capacity}</span>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-slate-500">
-                                    {svc.pricing.map((p) => (
-                                        <span key={p.interval} className="flex items-baseline gap-1">
-                                            <span className="text-xs text-slate-500 capitalize">{formatPricingInterval(p.interval)}:</span>
-                                            <span className="text-gray-900 dark:text-white font-bold">{p.currency} {p.price.toFixed(2)}</span>
+                                    {getAvailablePricingModes(svc).map(m => (
+                                        <span key={m.mode} className="flex items-baseline gap-1">
+                                            <span className="text-gray-900 dark:text-white font-bold">{svc.currency || 'JOD'} {m.price.toFixed(2)}</span>
+                                            {m.mode !== 'PER_BOOKING' && (
+                                                <span className="text-xs text-slate-500">({formatPricingMode(m.mode)})</span>
+                                            )}
                                         </span>
                                     ))}
                                 </div>

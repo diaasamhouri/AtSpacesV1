@@ -218,15 +218,8 @@ async function main() {
         name: `Hot Desk – ${branch.name}`,
         description: 'Flexible open seating with power and Wi-Fi.',
         capacity: 20,
-        pricing: {
-          create: [
-            { interval: 'HOURLY', price: 3.0 },
-            { interval: 'HALF_DAY', price: 10.0 },
-            { interval: 'DAILY', price: 15.0 },
-            { interval: 'WEEKLY', price: 60.0 },
-            { interval: 'MONTHLY', price: 200.0 },
-          ],
-        },
+        pricePerHour: 3.0,
+        pricePerBooking: 20.0,
       },
     });
 
@@ -238,13 +231,7 @@ async function main() {
         name: `Private Office – ${branch.name}`,
         description: 'Lockable private office for teams of 2-6.',
         capacity: 5,
-        pricing: {
-          create: [
-            { interval: 'DAILY', price: 40.0 },
-            { interval: 'WEEKLY', price: 180.0 },
-            { interval: 'MONTHLY', price: 600.0 },
-          ],
-        },
+        pricePerBooking: 40.0,
       },
     });
 
@@ -257,13 +244,9 @@ async function main() {
         description:
           'Equipped meeting room with projector and whiteboard, up to 10 people.',
         capacity: 10,
-        pricing: {
-          create: [
-            { interval: 'HOURLY', price: 15.0 },
-            { interval: 'HALF_DAY', price: 50.0 },
-            { interval: 'DAILY', price: 80.0 },
-          ],
-        },
+        pricePerHour: 15.0,
+        pricePerPerson: 8.0,
+        pricePerBooking: 100.0,
       },
     });
 

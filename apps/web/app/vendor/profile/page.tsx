@@ -73,7 +73,7 @@ export default function VendorProfilePage() {
                 setSocialLinks(data.socialLinks || {});
                 setLoading(false);
             })
-            .catch(() => setLoading(false));
+            .catch(() => { toast("Failed to load profile.", "error"); setLoading(false); });
     };
 
     const handleSave = async () => {
@@ -278,7 +278,7 @@ export default function VendorProfilePage() {
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">Registration Date</label>
-                        <input type="date" value={form.companyRegistrationDate} onChange={(e) => setForm({ ...form, companyRegistrationDate: e.target.value })} className={inputCls} />
+                        <input type="date" value={form.companyRegistrationDate} onChange={(e) => setForm({ ...form, companyRegistrationDate: e.target.value })} className={inputCls} max={new Date().toISOString().split("T")[0]} />
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">Sales Tax Number</label>

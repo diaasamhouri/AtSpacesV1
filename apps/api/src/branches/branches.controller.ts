@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, Post, Patch, Delete, Body, Req, UseGuard
 import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { BranchesService } from './branches.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CachePublic } from '../common/decorators/cache-header.decorator';
 import {
   ListBranchesQueryDto,
   BranchListResponseDto,
@@ -16,6 +17,7 @@ export class BranchesController {
   constructor(private branchesService: BranchesService) { }
 
   @Get()
+  @CachePublic(60)
   @ApiOperation({ summary: 'List active branches with filters (public)' })
   @ApiResponse({ status: 200, type: BranchListResponseDto })
   async listBranches(@Query() query: ListBranchesQueryDto) {
@@ -33,6 +35,7 @@ export class BranchesController {
   }
 
   @Get(':id')
+  @CachePublic(60)
   @ApiOperation({
     summary: 'Get branch detail with services and pricing (public)',
   })

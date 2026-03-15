@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/auth-context";
-import { formatServiceType } from "../../../lib/format";
-import { SETUP_TYPES } from "../../../lib/types";
+import { formatServiceType, formatPricingMode } from "../../../lib/format";
+import { SERVICE_TYPE_OPTIONS, SETUP_TYPES } from "../../../lib/types";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -20,20 +20,24 @@ interface AvailableUnit {
   unitNumber: string | null;
   type: string;
   capacity: number;
+  minCapacity: number;
+  floor: string | null;
+  description: string | null;
+  features: string[];
+  netSize: number | null;
   branchName: string;
   branchId: string;
   available: boolean;
   remainingSpots: number;
-  pricing: { interval: string; pricingMode: string; price: number; currency: string }[];
+  price: number;
+  pricingMode: string;
+  currency: string;
   setupConfigs: SetupConfigItem[];
 }
 
 const UNIT_TYPE_OPTIONS = [
   { value: "", label: "All Types" },
-  { value: "HOT_DESK", label: "Hot Desk" },
-  { value: "PRIVATE_OFFICE", label: "Private Office" },
-  { value: "MEETING_ROOM", label: "Meeting Room" },
-  { value: "EVENT_SPACE", label: "Event Space" },
+  ...SERVICE_TYPE_OPTIONS,
 ];
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
@@ -243,6 +247,7 @@ export default function SearchBookingPage() {
       endTime,
     };
     if (capacity) p.capacity = capacity;
+    if (unitType) p.serviceType = unitType;
     if (dateType === "multiple") {
       p.dates = multipleDates.join(",");
     } else {
@@ -279,9 +284,14 @@ export default function SearchBookingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Search For New Booking</h1>
-        <p className="text-sm text-slate-500 mt-1">Find available rooms and units</p>
+      <div className="flex items-center gap-4">
+        <button type="button" onClick={() => router.back()} className="rounded-lg p-2 text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-dark-800 transition-colors" title="Go back">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">New Reservation</h1>
+          <p className="text-sm text-slate-500 mt-1">Find available spaces, then create a quotation or booking</p>
+        </div>
       </div>
 
       {/* Filter panel */}
@@ -453,6 +463,7 @@ export default function SearchBookingPage() {
                         <th className="px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Branch</th>
                         <th className="px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Unit Name</th>
                         <th className="px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Unit #</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Floor</th>
                         <th className="px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Setup Types</th>
                         <th className="px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Capacity</th>
                         <th className="px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Status</th>
@@ -472,6 +483,9 @@ export default function SearchBookingPage() {
                           </td>
                           <td className="px-3 py-3 text-gray-700 dark:text-slate-300 whitespace-nowrap">
                             {unit.unitNumber || "-"}
+                          </td>
+                          <td className="px-3 py-3 text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                            {unit.floor || "-"}
                           </td>
                           <td className="px-3 py-3">
                             {unit.setupConfigs && unit.setupConfigs.length > 0 ? (
@@ -495,7 +509,9 @@ export default function SearchBookingPage() {
                             )}
                           </td>
                           <td className="px-3 py-3 text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                            {unit.capacity}
+                            {unit.minCapacity && unit.capacity
+                              ? `${unit.minCapacity}–${unit.capacity}`
+                              : unit.capacity || "-"}
                           </td>
                           <td className="px-3 py-3 whitespace-nowrap">
                             {unit.available ? (
@@ -509,20 +525,10 @@ export default function SearchBookingPage() {
                             )}
                           </td>
                           <td className="px-3 py-3">
-                            {unit.pricing.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {unit.pricing.map((p, i) => {
-                                  const modeLabel = p.pricingMode === "PER_PERSON" ? "Per Person" : p.pricingMode === "PER_HOUR" ? "Per Hour" : "Per Booking";
-                                  return (
-                                    <span
-                                      key={i}
-                                      className="rounded-lg bg-slate-100 dark:bg-dark-800 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-300"
-                                    >
-                                      {p.price} {p.currency} — {modeLabel}
-                                    </span>
-                                  );
-                                })}
-                              </div>
+                            {unit.price != null ? (
+                              <span className="rounded-lg bg-slate-100 dark:bg-dark-800 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-300">
+                                {unit.price} {unit.currency}{unit.pricingMode !== "PER_BOOKING" ? ` (${formatPricingMode(unit.pricingMode)})` : ""}
+                              </span>
                             ) : (
                               <span className="text-xs text-slate-400">-</span>
                             )}
@@ -532,15 +538,19 @@ export default function SearchBookingPage() {
                               <button
                                 className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
                                 onClick={() => {
-                                  router.push(`/vendor/quotations/new?${buildActionParams(unit)}`);
+                                  const params = buildActionParams(unit);
+                                  params.set("mode", "quote");
+                                  router.push(`/vendor/bookings/create?${params}`);
                                 }}
                               >
-                                Create Quotation
+                                Quote
                               </button>
                               <button
                                 className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600 transition-colors"
                                 onClick={() => {
-                                  router.push(`/vendor/bookings/create?${buildActionParams(unit)}`);
+                                  const params = buildActionParams(unit);
+                                  params.set("mode", "book");
+                                  router.push(`/vendor/bookings/create?${params}`);
                                 }}
                               >
                                 Book

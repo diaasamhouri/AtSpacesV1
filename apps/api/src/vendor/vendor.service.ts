@@ -33,6 +33,21 @@ export class VendorService {
         return vp;
     }
 
+    private getServicePrice(service: any, requestedMode?: string): { unitPrice: number; pricingMode: string } {
+        const prices: Record<string, number | null> = {
+            PER_BOOKING: service.pricePerBooking ? Number(service.pricePerBooking) : null,
+            PER_PERSON: service.pricePerPerson ? Number(service.pricePerPerson) : null,
+            PER_HOUR: service.pricePerHour ? Number(service.pricePerHour) : null,
+        };
+        if (requestedMode && prices[requestedMode] != null) {
+            return { unitPrice: prices[requestedMode]!, pricingMode: requestedMode };
+        }
+        for (const [mode, price] of Object.entries(prices)) {
+            if (price != null) return { unitPrice: price, pricingMode: mode };
+        }
+        throw new BadRequestException('Service has no pricing configured');
+    }
+
     private async getGlobalCommissionRate(): Promise<number> {
         const setting = await this.prisma.systemSettings.findUnique({ where: { key: 'DEFAULT_COMMISSION_RATE' } });
         return setting ? parseFloat(setting.value) : 10;
@@ -1061,13 +1076,12 @@ export class VendorService {
         for (const day of dto.days) {
             let daySubtotal = day.unitPrice || 0;
 
-            // Look up pricing mode from the service pricing record
-            const pricingRecord = day.pricingInterval && day.serviceId
-                ? await this.prisma.servicePricing.findFirst({
-                    where: { serviceId: day.serviceId, interval: day.pricingInterval as any, isActive: true },
-                })
-                : null;
-            const dayPricingMode = pricingRecord?.pricingMode || 'PER_BOOKING';
+            // Look up pricing mode from the service record
+            const dayServiceRecord = await this.prisma.service.findUnique({
+                where: { id: day.serviceId },
+                select: { pricePerBooking: true, pricePerPerson: true, pricePerHour: true },
+            });
+            const { pricingMode: dayPricingMode } = this.getServicePrice(dayServiceRecord);
             dayPricingModes.push(dayPricingMode);
 
             // Apply pricing mode multiplier
@@ -1119,7 +1133,7 @@ export class VendorService {
             // Validate service for this day
             const service = await this.prisma.service.findUnique({
                 where: { id: day.serviceId },
-                include: { setupConfigs: true, pricing: { where: { isActive: true } } },
+                include: { setupConfigs: true },
             });
             if (!service || !service.isActive || service.branchId !== dto.branchId) {
                 throw new BadRequestException(`Service ${day.serviceId} not found or does not belong to branch`);
@@ -1179,7 +1193,6 @@ export class VendorService {
                         totalPrice: dayTotal,
                         notes: day.notes || dto.notes,
                         requestedSetup: day.setupType ?? null,
-                        pricingInterval: day.pricingInterval ?? null,
                         pricingMode: dayPricingModes[i] as any,
                         unitPrice: day.unitPrice ?? null,
                         subtotal: daySubtotal,
@@ -1281,7 +1294,72 @@ export class VendorService {
         };
     }
 
-    // ==================== VENDOR BOOKING EDITING ====================
+    // ==================== VENDOR BOOKING GET / EDITING ====================
+
+    async getVendorBookingById(vendorUserId: string, bookingId: string) {
+        const vp = await this.getApprovedVendorProfile(vendorUserId);
+
+        const booking = await this.prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: {
+                branch: { select: { id: true, name: true, city: true, address: true, vendorProfileId: true } },
+                service: { select: { id: true, type: true, name: true } },
+                payment: true,
+                addOns: true,
+                user: { select: { id: true, name: true, email: true, phone: true } },
+            },
+        });
+
+        if (!booking || booking.branch.vendorProfileId !== vp.id) {
+            throw new NotFoundException('Booking not found');
+        }
+
+        const { vendorProfileId: _vpId, ...branchData } = booking.branch;
+        return {
+            id: booking.id,
+            status: booking.status,
+            startTime: booking.startTime.toISOString(),
+            endTime: booking.endTime.toISOString(),
+            numberOfPeople: booking.numberOfPeople,
+            totalPrice: booking.totalPrice.toNumber(),
+            currency: booking.currency,
+            notes: booking.notes,
+            requestedSetup: booking.requestedSetup ?? null,
+            pricingMode: booking.pricingMode ?? null,
+            unitPrice: booking.unitPrice ? booking.unitPrice.toNumber() : null,
+            subtotal: booking.subtotal ? booking.subtotal.toNumber() : null,
+            discountType: booking.discountType ?? 'NONE',
+            discountValue: booking.discountValue ? booking.discountValue.toNumber() : null,
+            discountAmount: booking.discountAmount ? booking.discountAmount.toNumber() : null,
+            taxRate: booking.taxRate ? booking.taxRate.toNumber() : null,
+            taxAmount: booking.taxAmount ? booking.taxAmount.toNumber() : null,
+            bookingGroupId: booking.bookingGroupId ?? null,
+            addOns: booking.addOns?.map((a: any) => ({
+                id: a.id,
+                vendorAddOnId: a.vendorAddOnId,
+                name: a.name,
+                unitPrice: a.unitPrice.toNumber(),
+                quantity: a.quantity,
+                totalPrice: a.totalPrice.toNumber(),
+                serviceTime: a.serviceTime?.toISOString() ?? null,
+                comments: a.comments,
+            })) ?? [],
+            createdAt: booking.createdAt.toISOString(),
+            branch: branchData,
+            service: booking.service,
+            payment: booking.payment
+                ? {
+                    id: booking.payment.id,
+                    method: booking.payment.method,
+                    status: booking.payment.status,
+                    amount: booking.payment.amount.toNumber(),
+                    currency: booking.payment.currency,
+                    paidAt: booking.payment.paidAt?.toISOString() ?? null,
+                }
+                : null,
+            customer: booking.user,
+        };
+    }
 
     async updateVendorBooking(vendorUserId: string, bookingId: string, dto: UpdateVendorBookingDto) {
         // 1. Get vendor profile with tax settings
@@ -1292,7 +1370,7 @@ export class VendorService {
             where: { id: bookingId },
             include: {
                 branch: { select: { id: true, name: true, city: true, address: true, vendorProfileId: true } },
-                service: { select: { id: true, type: true, name: true, branchId: true, isActive: true, capacity: true, pricing: { where: { isActive: true } } } },
+                service: { select: { id: true, type: true, name: true, branchId: true, isActive: true, capacity: true } },
                 payment: true,
                 addOns: true,
             },
@@ -1318,7 +1396,6 @@ export class VendorService {
         const finalNumberOfPeople = dto.numberOfPeople ?? booking.numberOfPeople;
         const finalNotes = dto.notes !== undefined ? dto.notes : booking.notes;
         const finalRequestedSetup = dto.requestedSetup !== undefined ? (dto.requestedSetup || null) : booking.requestedSetup;
-        const finalPricingInterval = dto.pricingInterval ?? booking.pricingInterval;
         const finalDiscountType = dto.discountType !== undefined ? dto.discountType : (booking.discountType as string);
         const finalDiscountValue = dto.discountValue !== undefined ? dto.discountValue : (booking.discountValue?.toNumber() ?? 0);
         const finalSubjectToTax = dto.subjectToTax ?? (booking.taxRate !== null && booking.taxRate.toNumber() > 0);
@@ -1344,7 +1421,7 @@ export class VendorService {
         if (dto.serviceId && dto.serviceId !== booking.serviceId) {
             const newService = await this.prisma.service.findUnique({
                 where: { id: dto.serviceId },
-                select: { id: true, type: true, name: true, branchId: true, isActive: true, capacity: true, pricing: { where: { isActive: true } } },
+                select: { id: true, type: true, name: true, branchId: true, isActive: true, capacity: true },
             });
             if (!newService || newService.branchId !== finalBranchId) {
                 throw new BadRequestException('Service not found or does not belong to the selected branch');
@@ -1355,14 +1432,21 @@ export class VendorService {
             finalService = newService as typeof booking.service;
         }
 
-        // 8. Resolve pricing: look up ServicePricing for the service + pricingInterval
-        const pricingRecord = finalPricingInterval
-            ? await this.prisma.servicePricing.findFirst({
-                where: { serviceId: finalServiceId, interval: finalPricingInterval, isActive: true },
-            })
-            : null;
-        const unitPrice = pricingRecord ? pricingRecord.price.toNumber() : (booking.unitPrice?.toNumber() ?? 0);
-        const pricingMode = pricingRecord?.pricingMode || booking.pricingMode || 'PER_BOOKING';
+        // 8. Resolve pricing from the service record
+        const resolvedService = await this.prisma.service.findUnique({
+            where: { id: finalServiceId },
+            select: { pricePerBooking: true, pricePerPerson: true, pricePerHour: true },
+        });
+        let unitPrice: number;
+        let pricingMode: string;
+        if (resolvedService) {
+            const resolved = this.getServicePrice(resolvedService, dto.pricingMode || booking.pricingMode || undefined);
+            unitPrice = resolved.unitPrice;
+            pricingMode = resolved.pricingMode;
+        } else {
+            unitPrice = booking.unitPrice?.toNumber() ?? 0;
+            pricingMode = dto.pricingMode || booking.pricingMode || 'PER_BOOKING';
+        }
 
         // 9. If startTime/endTime/serviceId changed, check availability EXCLUDING the current booking
         if (dto.startTime || dto.endTime || dto.serviceId) {
@@ -1430,7 +1514,6 @@ export class VendorService {
                 numberOfPeople: finalNumberOfPeople,
                 notes: finalNotes,
                 requestedSetup: finalRequestedSetup as any,
-                pricingInterval: finalPricingInterval,
                 pricingMode: pricingMode as any,
                 unitPrice,
                 subtotal,
@@ -1508,7 +1591,6 @@ export class VendorService {
             currency: b.currency,
             notes: b.notes,
             requestedSetup: b.requestedSetup,
-            pricingInterval: b.pricingInterval,
             pricingMode: b.pricingMode,
             unitPrice: b.unitPrice?.toNumber() ?? null,
             subtotal: b.subtotal?.toNumber() ?? null,

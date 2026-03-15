@@ -134,12 +134,10 @@ export class ReviewsService {
                             where: { isActive: true },
                             select: {
                                 type: true,
-                                pricing: {
-                                    where: { isActive: true },
-                                    orderBy: { price: 'asc' },
-                                    take: 1,
-                                    select: { price: true, currency: true, interval: true },
-                                },
+                                pricePerBooking: true,
+                                pricePerPerson: true,
+                                pricePerHour: true,
+                                currency: true,
                             },
                         },
                     },

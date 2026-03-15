@@ -2,12 +2,6 @@ export type City = 'AMMAN' | 'IRBID' | 'AQABA';
 export type ServiceType = 'HOT_DESK' | 'PRIVATE_OFFICE' | 'MEETING_ROOM' | 'EVENT_SPACE';
 export type RoomShape = 'L_SHAPE' | 'U_SHAPE' | 'RECTANGLE' | 'SQUARE' | 'OVAL' | 'CUSTOM';
 export type SetupType = 'CLASSROOM' | 'THEATER' | 'BOARDROOM' | 'U_SHAPE_SEATING' | 'HOLLOW_SQUARE' | 'BANQUET';
-export type PricingInterval =
-  | 'HOURLY'
-  | 'HALF_DAY'
-  | 'DAILY'
-  | 'WEEKLY'
-  | 'MONTHLY';
 export type PricingMode = 'PER_BOOKING' | 'PER_PERSON' | 'PER_HOUR';
 
 export interface VendorSummary {
@@ -16,16 +10,6 @@ export interface VendorSummary {
   logo: string | null;
   isVerified?: boolean;
   socialLinks?: Record<string, string>;
-}
-
-export interface PricingItem {
-  id: string;
-  interval: PricingInterval;
-  pricingMode?: PricingMode;
-  price: number;
-  currency: string;
-  isActive?: boolean;
-  isPublic?: boolean;
 }
 
 export interface SetupConfig {
@@ -51,8 +35,28 @@ export interface ServiceItem {
   minCapacity?: number;
   isActive?: boolean;
   isPublic?: boolean;
-  pricing: PricingItem[];
+  pricePerBooking?: number | null;
+  pricePerPerson?: number | null;
+  pricePerHour?: number | null;
+  currency?: string;
   setupConfigs: SetupConfig[];
+}
+
+export function getAvailablePricingModes(service: Pick<ServiceItem, 'pricePerBooking' | 'pricePerPerson' | 'pricePerHour'>): { mode: PricingMode; price: number }[] {
+  const modes: { mode: PricingMode; price: number }[] = [];
+  if (service.pricePerBooking != null) modes.push({ mode: 'PER_BOOKING', price: service.pricePerBooking });
+  if (service.pricePerPerson != null) modes.push({ mode: 'PER_PERSON', price: service.pricePerPerson });
+  if (service.pricePerHour != null) modes.push({ mode: 'PER_HOUR', price: service.pricePerHour });
+  return modes;
+}
+
+export function getServicePriceByMode(service: Pick<ServiceItem, 'pricePerBooking' | 'pricePerPerson' | 'pricePerHour'>, mode: string): number {
+  if (mode === 'PER_BOOKING' && service.pricePerBooking != null) return service.pricePerBooking;
+  if (mode === 'PER_PERSON' && service.pricePerPerson != null) return service.pricePerPerson;
+  if (mode === 'PER_HOUR' && service.pricePerHour != null) return service.pricePerHour;
+  // fallback to first available
+  const available = getAvailablePricingModes(service);
+  return available[0]?.price ?? 0;
 }
 
 export interface BranchListItem {
@@ -66,7 +70,6 @@ export interface BranchListItem {
   serviceTypes: ServiceType[];
   startingPrice: number | null;
   startingPricingMode?: PricingMode | null;
-  startingPricingInterval?: PricingInterval | null;
 }
 
 export interface PaginationMeta {
@@ -147,7 +150,6 @@ export interface Booking {
   currency: string;
   notes: string | null;
   requestedSetup?: string | null;
-  pricingInterval?: PricingInterval | null;
   pricingMode?: PricingMode | null;
   unitPrice?: number | null;
   subtotal?: number | null;
@@ -677,7 +679,10 @@ export interface AdminBranchDetail {
     unitNumber?: string | null;
     type: ServiceType;
     capacity: number | null;
-    pricing: { interval: string; price: number; currency: string }[];
+    pricePerBooking?: number | null;
+    pricePerPerson?: number | null;
+    pricePerHour?: number | null;
+    currency?: string;
     setupConfigs?: SetupConfig[];
   }[];
 }
@@ -710,7 +715,6 @@ export interface Quotation {
   discountAmount?: number | null;
   taxRate?: number | null;
   taxAmount?: number | null;
-  pricingInterval?: PricingInterval | null;
   pricingMode?: PricingMode | null;
   lineItems?: QuotationLineItem[];
   addOns?: QuotationAddOnItem[];
@@ -867,7 +871,10 @@ export interface AdminService {
   features: string[];
   createdAt: string;
   branch: { id: string; name: string; vendor?: string };
-  pricing: { id: string; interval: PricingInterval; price: number; currency: string; isActive?: boolean; isPublic?: boolean }[];
+  pricePerBooking?: number | null;
+  pricePerPerson?: number | null;
+  pricePerHour?: number | null;
+  currency?: string;
   setupConfigs: SetupConfig[];
 }
 

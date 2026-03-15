@@ -1,6 +1,6 @@
 import { IsString, IsOptional, IsNumber, Min, IsInt, IsEnum, IsArray, ValidateNested, IsUUID, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SetupType, PricingInterval } from '@prisma/client';
+import { PricingMode, SetupType } from '@prisma/client';
 
 export class BookingDayAddOnDto {
     @IsUUID()
@@ -37,10 +37,6 @@ export class BookingDayDto {
     setupType?: SetupType;
 
     @IsOptional()
-    @IsEnum(PricingInterval)
-    pricingInterval?: PricingInterval;
-
-    @IsOptional()
     @IsNumber()
     @Min(0)
     unitPrice?: number;
@@ -49,6 +45,10 @@ export class BookingDayDto {
     @IsInt()
     @Min(1)
     numberOfPeople?: number;
+
+    @IsOptional()
+    @IsEnum(PricingMode)
+    pricingMode?: PricingMode;
 
     @IsOptional()
     @IsString()

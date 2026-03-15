@@ -5,7 +5,6 @@ export {
   BranchListItemDto,
   PaginationMetaDto,
   ServiceResponseDto,
-  PricingResponseDto,
   VendorSummaryDto,
 } from './branch-response.dto';
 export { CreateBranchDto } from './create-branch.dto';

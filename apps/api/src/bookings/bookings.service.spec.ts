@@ -7,7 +7,7 @@ import {
 import { BookingsService } from './bookings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { CreateBookingDto, PricingIntervalParam, PaymentMethodParam } from './dto';
+import { CreateBookingDto, PaymentMethodParam } from './dto';
 
 // Helper to build a Decimal-like object that matches Prisma's Decimal
 const decimal = (value: number) => ({ toNumber: () => value });
@@ -23,10 +23,10 @@ const VENDOR_PROFILE_ID = 'vendor-uuid-1';
 const BOOKING_ID = 'booking-uuid-1';
 const PAYMENT_ID = 'payment-uuid-1';
 
-/** A Wednesday (day index 3) at 10:00 UTC */
-const START_TIME = new Date('2026-03-04T10:00:00.000Z');
+/** A Wednesday (day index 3) at 10:00 UTC — must be in the future for suggestedSlots tests */
+const START_TIME = new Date('2026-06-03T10:00:00.000Z');
 /** Same Wednesday at 12:00 UTC */
-const END_TIME = new Date('2026-03-04T12:00:00.000Z');
+const END_TIME = new Date('2026-06-03T12:00:00.000Z');
 
 const baseBranch = {
   id: BRANCH_ID,
@@ -47,11 +47,13 @@ const baseBranch = {
 const baseService = {
   id: SERVICE_ID,
   isActive: true,
+  isPublic: true,
   capacity: 10,
+  pricePerBooking: decimal(25),
+  pricePerPerson: null,
+  pricePerHour: null,
+  currency: 'JOD',
   branch: baseBranch,
-  pricing: [
-    { id: 'pricing-1', interval: 'HOURLY', price: decimal(25), isActive: true },
-  ],
 };
 
 const baseDto: CreateBookingDto = {
@@ -59,7 +61,6 @@ const baseDto: CreateBookingDto = {
   startTime: START_TIME.toISOString(),
   endTime: END_TIME.toISOString(),
   numberOfPeople: 1,
-  pricingInterval: PricingIntervalParam.HOURLY,
   paymentMethod: PaymentMethodParam.VISA,
 };
 
@@ -76,6 +77,16 @@ const baseBookingRecord = {
   currency: 'JOD',
   notes: null,
   requestedSetup: null,
+  pricingMode: null,
+  unitPrice: null,
+  subtotal: null,
+  discountType: 'NONE',
+  discountValue: null,
+  discountAmount: null,
+  taxRate: null,
+  taxAmount: null,
+  bookingGroupId: null,
+  addOns: [],
   createdAt: new Date('2026-03-01T00:00:00.000Z'),
   branch: { id: BRANCH_ID, name: 'Downtown Hub', city: 'AMMAN', address: '123 Main St' },
   service: { id: SERVICE_ID, type: 'HOT_DESK', name: 'Hot Desk' },
@@ -162,6 +173,16 @@ describe('BookingsService', () => {
         currency: 'JOD',
         notes: null,
         requestedSetup: null,
+        pricingMode: null,
+        unitPrice: null,
+        subtotal: null,
+        discountType: 'NONE',
+        discountValue: null,
+        discountAmount: null,
+        taxRate: null,
+        taxAmount: null,
+        bookingGroupId: null,
+        addOns: [],
         createdAt: expect.any(String),
         branch: baseBookingRecord.branch,
         service: baseBookingRecord.service,
@@ -282,21 +303,6 @@ describe('BookingsService', () => {
       );
       await expect(service.createBooking(USER_ID, baseDto)).rejects.toThrow(
         'Branch is not currently active',
-      );
-    });
-
-    it('should throw BadRequestException when pricing interval is not available', async () => {
-      const dto: CreateBookingDto = {
-        ...baseDto,
-        pricingInterval: PricingIntervalParam.MONTHLY,
-      };
-      prisma.service.findUnique.mockResolvedValue(baseService); // only HOURLY pricing
-
-      await expect(service.createBooking(USER_ID, dto)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.createBooking(USER_ID, dto)).rejects.toThrow(
-        'No pricing available for interval: MONTHLY',
       );
     });
 
@@ -597,6 +603,16 @@ describe('BookingsService', () => {
             currency: 'JOD',
             notes: null,
             requestedSetup: null,
+            pricingMode: null,
+            unitPrice: null,
+            subtotal: null,
+            discountType: 'NONE',
+            discountValue: null,
+            discountAmount: null,
+            taxRate: null,
+            taxAmount: null,
+            bookingGroupId: null,
+            addOns: [],
             createdAt: expect.any(String),
             branch: baseBookingRecord.branch,
             service: baseBookingRecord.service,
@@ -619,6 +635,7 @@ describe('BookingsService', () => {
           branch: { select: { id: true, name: true, city: true, address: true } },
           service: { select: { id: true, type: true, name: true } },
           payment: true,
+          addOns: true,
         },
       });
     });

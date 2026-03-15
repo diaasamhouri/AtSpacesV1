@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -55,6 +55,22 @@ const mockPrismaService = () => ({
   },
   adminAuditLog: {
     create: jest.fn(),
+  },
+  service: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    count: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  },
+  paymentLog: {
+    create: jest.fn(),
+    findMany: jest.fn(),
+  },
+  serviceSetupConfig: {
+    deleteMany: jest.fn(),
+    createMany: jest.fn(),
   },
   $transaction: jest.fn(),
 });
@@ -530,10 +546,51 @@ describe('AdminService', () => {
       );
     });
 
-    it('should not update vendor profile when type is not VENDOR_REGISTRATION', async () => {
+    it('should approve CAPACITY_CHANGE and activate branch', async () => {
       const mockRequest = {
         id: 'ar3',
-        type: 'BRANCH_CREATION',
+        type: 'CAPACITY_CHANGE',
+        vendorProfileId: null,
+        branchId: 'b1',
+        status: 'PENDING',
+      };
+
+      prisma.approvalRequest.findUnique.mockResolvedValue(mockRequest);
+      prisma.approvalRequest.update.mockResolvedValue({
+        ...mockRequest,
+        status: 'APPROVED',
+        reason: null,
+        reviewedBy: 'admin1',
+        reviewedAt: new Date(),
+      });
+      prisma.branch.findUnique.mockResolvedValue({
+        id: 'b1',
+        name: 'Test Branch',
+        status: 'UNDER_REVIEW',
+        vendor: { userId: 'u1', companyName: 'V' },
+      });
+      prisma.branch.update.mockResolvedValue({});
+      prisma.notification.create.mockResolvedValue({});
+
+      await service.processApproval('ar3', 'APPROVED', undefined, 'admin1');
+
+      expect(prisma.vendorProfile.update).not.toHaveBeenCalled();
+      expect(prisma.branch.update).toHaveBeenCalledWith({
+        where: { id: 'b1' },
+        data: { status: 'ACTIVE' },
+      });
+      expect(prisma.notification.create).toHaveBeenCalled();
+    });
+  });
+
+  // ==================== processApproval - BRANCH_SUSPENSION ====================
+
+  describe('processApproval - BRANCH_SUSPENSION', () => {
+    it('should approve branch suspension and keep branch suspended', async () => {
+      const mockRequest = {
+        id: 'ar4',
+        type: 'BRANCH_SUSPENSION',
+        branchId: 'b1',
         vendorProfileId: null,
         status: 'PENDING',
       };
@@ -546,11 +603,419 @@ describe('AdminService', () => {
         reviewedBy: 'admin1',
         reviewedAt: new Date(),
       });
+      prisma.branch.findUnique.mockResolvedValue({
+        id: 'b1',
+        name: 'Test Branch',
+        status: 'SUSPENDED',
+        vendor: { userId: 'u1', companyName: 'V' },
+      });
+      prisma.notification.create.mockResolvedValue({});
 
-      await service.processApproval('ar3', 'APPROVED', undefined, 'admin1');
+      await service.processApproval('ar4', 'APPROVED', undefined, 'admin1');
 
-      expect(prisma.vendorProfile.update).not.toHaveBeenCalled();
-      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(prisma.branch.update).not.toHaveBeenCalled();
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          title: 'Branch Suspension Confirmed',
+        }),
+      });
+    });
+
+    it('should reject branch suspension and revert to ACTIVE', async () => {
+      const mockRequest = {
+        id: 'ar4',
+        type: 'BRANCH_SUSPENSION',
+        branchId: 'b1',
+        vendorProfileId: null,
+        status: 'PENDING',
+      };
+
+      prisma.approvalRequest.findUnique.mockResolvedValue(mockRequest);
+      prisma.approvalRequest.update.mockResolvedValue({
+        ...mockRequest,
+        status: 'REJECTED',
+        reason: 'Not allowed',
+        reviewedBy: 'admin1',
+        reviewedAt: new Date(),
+      });
+      prisma.branch.findUnique.mockResolvedValue({
+        id: 'b1',
+        name: 'Test Branch',
+        status: 'SUSPENDED',
+        vendor: { userId: 'u1', companyName: 'V' },
+      });
+      prisma.branch.update.mockResolvedValue({});
+      prisma.notification.create.mockResolvedValue({});
+
+      await service.processApproval('ar4', 'REJECTED', 'Not allowed', 'admin1');
+
+      expect(prisma.branch.update).toHaveBeenCalledWith({
+        where: { id: 'b1' },
+        data: { status: 'ACTIVE' },
+      });
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          title: 'Branch Suspension Denied',
+        }),
+      });
+    });
+  });
+
+  // ==================== listBookings ====================
+
+  describe('listBookings', () => {
+    it('should return paginated bookings', async () => {
+      const now = new Date();
+      const mockBookings = [
+        {
+          id: 'bk1',
+          status: 'CONFIRMED',
+          startTime: now,
+          endTime: now,
+          numberOfPeople: 2,
+          totalPrice: { toNumber: () => 50 },
+          currency: 'JOD',
+          notes: null,
+          createdAt: now,
+          user: { name: 'Customer', email: 'c@test.com' },
+          branch: { name: 'Branch', city: 'AMMAN', vendor: { companyName: 'Vendor' } },
+          service: { name: 'Room', type: 'MEETING_ROOM' },
+          payment: { status: 'COMPLETED', amount: { toNumber: () => 50 }, method: 'VISA' },
+        },
+      ];
+
+      prisma.booking.findMany.mockResolvedValue(mockBookings);
+      prisma.booking.count.mockResolvedValue(1);
+
+      const result = await service.listBookings({ page: 1, limit: 20 });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.meta.total).toBe(1);
+      expect(result.data[0].totalPrice).toBe(50);
+      expect(result.data[0].customer.name).toBe('Customer');
+    });
+  });
+
+  // ==================== getBookingById ====================
+
+  describe('getBookingById', () => {
+    it('should return booking detail', async () => {
+      const now = new Date();
+      prisma.booking.findUnique.mockResolvedValue({
+        id: 'bk1',
+        status: 'CONFIRMED',
+        startTime: now,
+        endTime: now,
+        numberOfPeople: 2,
+        totalPrice: { toNumber: () => 50 },
+        currency: 'JOD',
+        notes: null,
+        createdAt: now,
+        user: { id: 'u1', name: 'Customer', email: 'c@test.com', phone: '123' },
+        branch: { id: 'b1', name: 'Branch', city: 'AMMAN', address: 'Addr', vendor: { companyName: 'Vendor' } },
+        service: { id: 's1', name: 'Room', type: 'MEETING_ROOM' },
+        payment: { id: 'p1', method: 'VISA', status: 'COMPLETED', amount: { toNumber: () => 50 }, currency: 'JOD', paidAt: now, createdAt: now },
+      });
+
+      const result = await service.getBookingById('bk1');
+
+      expect(result.id).toBe('bk1');
+      expect(result.totalPrice).toBe(50);
+      expect(result.customer.name).toBe('Customer');
+      expect(result.branch.id).toBe('b1');
+      expect(result.payment.id).toBe('p1');
+    });
+
+    it('should throw NotFoundException when booking not found', async () => {
+      prisma.booking.findUnique.mockResolvedValue(null);
+      await expect(service.getBookingById('nonexistent')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ==================== updateBookingStatus ====================
+
+  describe('updateBookingStatus', () => {
+    it('should update booking status with valid transition', async () => {
+      prisma.booking.findUnique.mockResolvedValue({ id: 'bk1', status: 'CONFIRMED' });
+      prisma.booking.update.mockResolvedValue({ id: 'bk1', status: 'CHECKED_IN' });
+
+      await service.updateBookingStatus('bk1', 'CHECKED_IN' as any);
+
+      expect(prisma.booking.update).toHaveBeenCalledWith({
+        where: { id: 'bk1' },
+        data: { status: 'CHECKED_IN' },
+      });
+    });
+
+    it('should throw BadRequestException for invalid transition', async () => {
+      prisma.booking.findUnique.mockResolvedValue({ id: 'bk1', status: 'COMPLETED' });
+
+      await expect(service.updateBookingStatus('bk1', 'CONFIRMED' as any)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException when booking not found', async () => {
+      prisma.booking.findUnique.mockResolvedValue(null);
+
+      await expect(service.updateBookingStatus('bk1', 'CONFIRMED' as any)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should auto-refund on CANCELLED when payment is COMPLETED', async () => {
+      prisma.booking.findUnique.mockResolvedValue({ id: 'bk1', status: 'CONFIRMED' });
+      prisma.payment.findUnique.mockResolvedValue({ id: 'p1', status: 'COMPLETED', bookingId: 'bk1' });
+      prisma.payment.update.mockResolvedValue({});
+      prisma.booking.update.mockResolvedValue({ id: 'bk1', status: 'CANCELLED' });
+
+      await service.updateBookingStatus('bk1', 'CANCELLED' as any);
+
+      expect(prisma.payment.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { status: 'REFUNDED' },
+      });
+    });
+  });
+
+  // ==================== refundPayment ====================
+
+  describe('refundPayment', () => {
+    it('should refund a completed payment', async () => {
+      prisma.payment.findUnique.mockResolvedValue({
+        id: 'p1',
+        status: 'COMPLETED',
+        amount: { toNumber: () => 100 },
+        currency: 'JOD',
+        bookingId: 'bk1',
+      });
+      prisma.$transaction.mockResolvedValue([{ id: 'p1' }]);
+      prisma.booking.findUnique.mockResolvedValue({
+        userId: 'u1',
+        branchId: 'b1',
+        branch: { name: 'Branch' },
+      });
+      prisma.notification.create.mockResolvedValue({});
+
+      await service.refundPayment('p1', 'admin1');
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when payment not found', async () => {
+      prisma.payment.findUnique.mockResolvedValue(null);
+
+      await expect(service.refundPayment('nonexistent')).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException when payment is not COMPLETED', async () => {
+      prisma.payment.findUnique.mockResolvedValue({ id: 'p1', status: 'PENDING' });
+
+      await expect(service.refundPayment('p1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ==================== listAdminServices ====================
+
+  describe('listAdminServices', () => {
+    it('should return paginated services with pricing', async () => {
+      const now = new Date();
+      prisma.service.findMany.mockResolvedValue([
+        {
+          id: 's1',
+          name: 'Room A',
+          unitNumber: '101',
+          type: 'MEETING_ROOM',
+          description: 'Desc',
+          capacity: 10,
+          isActive: true,
+          isPublic: true,
+          floor: '1',
+          profileNameEn: null,
+          profileNameAr: null,
+          weight: null,
+          netSize: null,
+          shape: null,
+          features: [],
+          pricePerBooking: { toNumber: () => 100 },
+          pricePerPerson: null,
+          pricePerHour: { toNumber: () => 15 },
+          currency: 'JOD',
+          createdAt: now,
+          branch: { id: 'b1', name: 'Branch', vendor: { companyName: 'Vendor' } },
+          setupConfigs: [],
+        },
+      ]);
+      prisma.service.count.mockResolvedValue(1);
+
+      const result = await service.listAdminServices({ page: 1, limit: 20 });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].pricePerBooking).toBe(100);
+      expect(result.data[0].pricePerPerson).toBeNull();
+      expect(result.data[0].pricePerHour).toBe(15);
+    });
+  });
+
+  // ==================== getAdminServiceById ====================
+
+  describe('getAdminServiceById', () => {
+    it('should return service detail', async () => {
+      const now = new Date();
+      prisma.service.findUnique.mockResolvedValue({
+        id: 's1',
+        name: 'Room A',
+        unitNumber: '101',
+        type: 'MEETING_ROOM',
+        description: 'Desc',
+        capacity: 10,
+        isActive: true,
+        isPublic: true,
+        floor: '1',
+        profileNameEn: null,
+        profileNameAr: null,
+        weight: null,
+        netSize: null,
+        shape: null,
+        features: [],
+        pricePerBooking: { toNumber: () => 100 },
+        pricePerPerson: null,
+        pricePerHour: { toNumber: () => 15 },
+        currency: 'JOD',
+        createdAt: now,
+        branch: { id: 'b1', name: 'Branch', vendor: { companyName: 'Vendor' } },
+        setupConfigs: [],
+      });
+
+      const result = await service.getAdminServiceById('s1');
+
+      expect(result.id).toBe('s1');
+      expect(result.name).toBe('Room A');
+      expect(result.pricePerBooking).toBe(100);
+      expect(result.branch.vendor).toBe('Vendor');
+    });
+
+    it('should throw NotFoundException when service not found', async () => {
+      prisma.service.findUnique.mockResolvedValue(null);
+
+      await expect(service.getAdminServiceById('nonexistent')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ==================== createAdminService ====================
+
+  describe('createAdminService', () => {
+    it('should create a service', async () => {
+      const now = new Date();
+      prisma.branch.findUnique.mockResolvedValue({ id: 'b1' });
+      prisma.service.create.mockResolvedValue({ id: 's1' });
+      prisma.service.findUnique.mockResolvedValue({
+        id: 's1',
+        name: 'New Room',
+        unitNumber: null,
+        type: 'MEETING_ROOM',
+        description: null,
+        capacity: null,
+        isActive: true,
+        isPublic: true,
+        floor: null,
+        profileNameEn: null,
+        profileNameAr: null,
+        weight: null,
+        netSize: null,
+        shape: null,
+        features: [],
+        pricePerBooking: { toNumber: () => 100 },
+        pricePerPerson: null,
+        pricePerHour: null,
+        currency: 'JOD',
+        createdAt: now,
+        branch: { id: 'b1', name: 'Branch', vendor: { companyName: 'Vendor' } },
+        setupConfigs: [],
+      });
+
+      const result = await service.createAdminService({
+        branchId: 'b1',
+        type: 'MEETING_ROOM',
+        name: 'New Room',
+        pricePerBooking: 100,
+      } as any);
+
+      expect(prisma.service.create).toHaveBeenCalled();
+      expect(result.id).toBe('s1');
+    });
+
+    it('should throw NotFoundException when branch not found', async () => {
+      prisma.branch.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.createAdminService({ branchId: 'b1', type: 'MEETING_ROOM', name: 'Room' } as any),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ==================== updateAdminService ====================
+
+  describe('updateAdminService', () => {
+    it('should update service fields', async () => {
+      const now = new Date();
+      // First call: existence check
+      prisma.service.findUnique.mockResolvedValueOnce({ id: 's1' });
+      prisma.service.update.mockResolvedValue({});
+      // Second call: getAdminServiceById
+      prisma.service.findUnique.mockResolvedValueOnce({
+        id: 's1',
+        name: 'Updated Room',
+        unitNumber: null,
+        type: 'MEETING_ROOM',
+        description: null,
+        capacity: null,
+        isActive: true,
+        isPublic: true,
+        floor: null,
+        profileNameEn: null,
+        profileNameAr: null,
+        weight: null,
+        netSize: null,
+        shape: null,
+        features: [],
+        pricePerBooking: null,
+        pricePerPerson: null,
+        pricePerHour: null,
+        currency: 'JOD',
+        createdAt: now,
+        branch: { id: 'b1', name: 'Branch', vendor: { companyName: 'Vendor' } },
+        setupConfigs: [],
+      });
+
+      const result = await service.updateAdminService('s1', { name: 'Updated Room' });
+
+      expect(prisma.service.update).toHaveBeenCalledWith({
+        where: { id: 's1' },
+        data: expect.objectContaining({ name: 'Updated Room' }),
+      });
+      expect(result.name).toBe('Updated Room');
+    });
+
+    it('should throw NotFoundException when service not found', async () => {
+      prisma.service.findUnique.mockResolvedValue(null);
+
+      await expect(service.updateAdminService('nonexistent', { name: 'X' })).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ==================== deleteAdminService ====================
+
+  describe('deleteAdminService', () => {
+    it('should delete a service', async () => {
+      prisma.service.findUnique.mockResolvedValue({ id: 's1' });
+      prisma.service.delete.mockResolvedValue({ id: 's1' });
+
+      await service.deleteAdminService('s1');
+
+      expect(prisma.service.delete).toHaveBeenCalledWith({ where: { id: 's1' } });
+    });
+
+    it('should throw NotFoundException when service not found', async () => {
+      prisma.service.findUnique.mockResolvedValue(null);
+
+      await expect(service.deleteAdminService('nonexistent')).rejects.toThrow(NotFoundException);
     });
   });
 });
