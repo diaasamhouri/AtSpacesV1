@@ -11,6 +11,7 @@ COPY . .
 RUN npx prisma generate && npm run build
 
 FROM base AS runner
+RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
