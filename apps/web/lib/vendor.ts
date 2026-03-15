@@ -111,7 +111,7 @@ export async function getVendorBookingById(
     token: string,
     bookingId: string,
 ): Promise<VendorBooking> {
-    return apiFetch<VendorBooking>(`/bookings/${bookingId}`, { token });
+    return apiFetch<VendorBooking>(`/vendor/bookings/${bookingId}`, { token });
 }
 
 export async function updateVendorBooking(
@@ -123,9 +123,9 @@ export async function updateVendorBooking(
         startTime?: string;
         endTime?: string;
         numberOfPeople?: number;
-        pricingInterval?: string;
         notes?: string;
         requestedSetup?: string;
+        pricingMode?: string;
         addOns?: { vendorAddOnId: string; quantity: number; serviceTime?: string; comments?: string }[];
         discountType?: string;
         discountValue?: number;
@@ -305,7 +305,6 @@ export async function createVendorBooking(token: string, data: {
         endTime: string;
         serviceId: string;
         setupType?: string;
-        pricingInterval?: string;
         unitPrice?: number;
         numberOfPeople?: number;
         notes?: string;

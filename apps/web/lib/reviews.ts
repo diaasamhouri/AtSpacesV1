@@ -40,7 +40,9 @@ export interface Favorite {
         vendor: { companyName: string };
         services: {
             type: string;
-            pricing: { price: number; currency: string; interval: string }[];
+            price: number;
+            pricingMode: string;
+            currency?: string;
         }[];
     };
 }

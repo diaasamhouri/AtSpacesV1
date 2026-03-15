@@ -1,7 +1,6 @@
 export {
   CreateBookingDto,
   CheckAvailabilityQueryDto,
-  PricingIntervalParam,
   PaymentMethodParam,
 } from './create-booking.dto';
 export {

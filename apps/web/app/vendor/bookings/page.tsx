@@ -7,7 +7,7 @@ import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../components/ui/toast-provider";
 import { BookingStatus, VendorBooking, PaymentLogEntry } from "../../../lib/types";
 import { format } from "date-fns";
-import { formatBookingStatus, formatPaymentStatus, formatPricingInterval, formatPricingMode, formatSetupType } from "../../../lib/format";
+import { formatBookingStatus, formatPaymentStatus, formatPricingMode, formatSetupType } from "../../../lib/format";
 import StatusBadge from "../../components/ui/status-badge";
 import { Pagination } from "../../components/pagination";
 import { SearchBar } from "../../components/search-bar";
@@ -25,6 +25,19 @@ const STATUSES = [
     { value: "REJECTED", label: "Rejected" },
     { value: "NO_SHOW", label: "No Show" },
 ];
+
+/** Valid status transitions — mirrors backend VALID_TRANSITIONS */
+const VALID_TRANSITIONS: Record<string, string[]> = {
+    PENDING: ["CONFIRMED", "REJECTED", "CANCELLED", "EXPIRED"],
+    PENDING_APPROVAL: ["CONFIRMED", "REJECTED", "CANCELLED", "EXPIRED"],
+    CONFIRMED: ["CHECKED_IN", "CANCELLED", "NO_SHOW"],
+    CHECKED_IN: ["COMPLETED", "NO_SHOW"],
+    COMPLETED: [],
+    CANCELLED: [],
+    REJECTED: [],
+    EXPIRED: [],
+    NO_SHOW: [],
+};
 
 function isCashPending(b: VendorBooking) {
     if (b.status === "NO_SHOW" || b.status === "CANCELLED" || b.status === "REJECTED" || b.status === "EXPIRED") return false;
@@ -323,8 +336,8 @@ export default function VendorBookings() {
                             </div>
                             <div className="text-right">
                                 <span className="text-sm font-bold text-brand-400">{booking.totalPrice.toFixed(2)} {booking.currency}</span>
-                                {booking.unitPrice != null && booking.pricingInterval && (
-                                    <div className="text-[10px] text-slate-500">{booking.unitPrice.toFixed(2)} / {formatPricingInterval(booking.pricingInterval)}{booking.pricingMode && booking.pricingMode !== "PER_BOOKING" ? ` (${formatPricingMode(booking.pricingMode)})` : ""}</div>
+                                {booking.unitPrice != null && (
+                                    <div className="text-[10px] text-slate-500">{booking.unitPrice.toFixed(2)} JOD{booking.pricingMode && booking.pricingMode !== "PER_BOOKING" ? ` (${formatPricingMode(booking.pricingMode)})` : ""}</div>
                                 )}
                             </div>
                         </div>
@@ -444,16 +457,13 @@ export default function VendorBookings() {
                                                         className={`text-xs font-bold rounded-full px-3 py-1.5 outline-none focus:ring-2 focus:ring-brand-500 ${STATUS_BG[booking.status]}`}
                                                         value={booking.status}
                                                         onChange={(e) => handleStatusChange(booking.id, e.target.value as BookingStatus)}
-                                                        disabled={booking.status === "CANCELLED" || booking.status === "COMPLETED" || booking.status === "REJECTED"}
+                                                        disabled={(VALID_TRANSITIONS[booking.status] ?? []).length === 0}
                                                         style={{ appearance: "none", backgroundImage: "none", textAlign: "center", cursor: "pointer" }}
                                                     >
-                                                        <option value="PENDING">{formatBookingStatus("PENDING")}</option>
-                                                        <option value="CONFIRMED">{formatBookingStatus("CONFIRMED")}</option>
-                                                        <option value="CHECKED_IN">{formatBookingStatus("CHECKED_IN")}</option>
-                                                        <option value="COMPLETED">{formatBookingStatus("COMPLETED")}</option>
-                                                        <option value="NO_SHOW">{formatBookingStatus("NO_SHOW")}</option>
-                                                        <option value="CANCELLED">{formatBookingStatus("CANCELLED")}</option>
-                                                        <option value="REJECTED">{formatBookingStatus("REJECTED")}</option>
+                                                        <option value={booking.status}>{formatBookingStatus(booking.status)}</option>
+                                                        {(VALID_TRANSITIONS[booking.status] ?? []).map((s) => (
+                                                            <option key={s} value={s}>{formatBookingStatus(s)}</option>
+                                                        ))}
                                                     </select>
                                                 )}
                                             </td>
@@ -461,9 +471,9 @@ export default function VendorBookings() {
                                                 <div className="text-sm font-bold text-brand-400 mb-0.5">
                                                     {booking.totalPrice.toFixed(2)} {booking.currency}
                                                 </div>
-                                                {booking.unitPrice != null && booking.pricingInterval && (
+                                                {booking.unitPrice != null && (
                                                     <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">
-                                                        {booking.unitPrice.toFixed(2)} JOD / {formatPricingInterval(booking.pricingInterval)}
+                                                        {booking.unitPrice.toFixed(2)} JOD
                                                         {booking.pricingMode && booking.pricingMode !== "PER_BOOKING" && <span className="ml-1 text-slate-400">({formatPricingMode(booking.pricingMode)})</span>}
                                                     </div>
                                                 )}

@@ -643,9 +643,7 @@ export class AdminService {
             where: { id },
             include: {
                 vendor: { select: { id: true, companyName: true, status: true } },
-                services: {
-                    include: { pricing: true },
-                },
+                services: true,
             },
         });
         if (!branch) throw new NotFoundException('Branch not found');
@@ -672,7 +670,10 @@ export class AdminService {
                 name: s.name,
                 type: s.type,
                 capacity: s.capacity,
-                pricing: s.pricing.map(p => ({ interval: p.interval, price: p.price.toNumber(), currency: p.currency })),
+                pricePerBooking: s.pricePerBooking ? s.pricePerBooking.toNumber() : null,
+                pricePerPerson: s.pricePerPerson ? s.pricePerPerson.toNumber() : null,
+                pricePerHour: s.pricePerHour ? s.pricePerHour.toNumber() : null,
+                currency: s.currency,
             })),
         };
     }
@@ -780,6 +781,64 @@ export class AdminService {
                     data: { vendorProfileId: req.vendorProfileId },
                 },
             });
+        }
+
+        // For new branch approval requests, activate or keep the branch under review
+        if (req.type === 'CAPACITY_CHANGE' && req.branchId) {
+            const branch = await this.prisma.branch.findUnique({
+                where: { id: req.branchId },
+                include: { vendor: { select: { userId: true, companyName: true } } },
+            });
+
+            if (branch) {
+                if (status === 'APPROVED') {
+                    await this.prisma.branch.update({
+                        where: { id: req.branchId },
+                        data: { status: 'ACTIVE' },
+                    });
+                }
+
+                await this.prisma.notification.create({
+                    data: {
+                        userId: branch.vendor.userId,
+                        type: 'GENERAL',
+                        title: status === 'APPROVED' ? 'Branch Approved' : 'Branch Rejected',
+                        message: status === 'APPROVED'
+                            ? `Your branch "${branch.name}" has been approved and is now live.`
+                            : `Your branch "${branch.name}" was not approved.${reason ? ` Reason: ${reason}` : ''}`,
+                    },
+                });
+            }
+        }
+
+        // For branch suspension requests, confirm or revert the suspension
+        if (req.type === 'BRANCH_SUSPENSION' && req.branchId) {
+            const branch = await this.prisma.branch.findUnique({
+                where: { id: req.branchId },
+                include: { vendor: { select: { userId: true, companyName: true } } },
+            });
+
+            if (branch) {
+                if (status === 'REJECTED') {
+                    // Admin rejected the suspension — revert branch back to ACTIVE
+                    await this.prisma.branch.update({
+                        where: { id: req.branchId },
+                        data: { status: 'ACTIVE' },
+                    });
+                }
+                // If APPROVED, branch stays SUSPENDED (already set when vendor requested it)
+
+                await this.prisma.notification.create({
+                    data: {
+                        userId: branch.vendor.userId,
+                        type: 'GENERAL',
+                        title: status === 'APPROVED' ? 'Branch Suspension Confirmed' : 'Branch Suspension Denied',
+                        message: status === 'APPROVED'
+                            ? `Your request to suspend branch "${branch.name}" has been approved.`
+                            : `Your request to suspend branch "${branch.name}" was denied. The branch has been reactivated.${reason ? ` Reason: ${reason}` : ''}`,
+                    },
+                });
+            }
         }
 
         return updated;
@@ -909,7 +968,6 @@ export class AdminService {
     }
 
     async getUserGrowthAnalytics() {
-        // ... (existing analytics method)
         const users = await this.prisma.user.findMany({
             orderBy: { createdAt: 'asc' },
             select: { createdAt: true, role: true },
@@ -1007,7 +1065,6 @@ export class AdminService {
                     branch: {
                         select: { id: true, name: true, vendor: { select: { companyName: true } } },
                     },
-                    pricing: true,
                     setupConfigs: true,
                 },
             }),
@@ -1031,9 +1088,12 @@ export class AdminService {
                 netSize: s.netSize ? s.netSize.toNumber() : null,
                 shape: s.shape,
                 features: s.features,
+                pricePerBooking: s.pricePerBooking ? s.pricePerBooking.toNumber() : null,
+                pricePerPerson: s.pricePerPerson ? s.pricePerPerson.toNumber() : null,
+                pricePerHour: s.pricePerHour ? s.pricePerHour.toNumber() : null,
+                currency: s.currency,
                 createdAt: s.createdAt,
                 branch: { id: s.branch.id, name: s.branch.name, vendor: s.branch.vendor.companyName },
-                pricing: s.pricing.map(p => ({ id: p.id, interval: p.interval, pricingMode: p.pricingMode, isPublic: p.isPublic, price: p.price.toNumber(), currency: p.currency })),
                 setupConfigs: s.setupConfigs.map(c => ({ setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
             })),
             total, page, limit,
@@ -1047,7 +1107,6 @@ export class AdminService {
                 branch: {
                     select: { id: true, name: true, vendor: { select: { companyName: true } } },
                 },
-                pricing: true,
                 setupConfigs: true,
             },
         });
@@ -1069,9 +1128,12 @@ export class AdminService {
             netSize: service.netSize ? service.netSize.toNumber() : null,
             shape: service.shape,
             features: service.features,
+            pricePerBooking: service.pricePerBooking ? service.pricePerBooking.toNumber() : null,
+            pricePerPerson: service.pricePerPerson ? service.pricePerPerson.toNumber() : null,
+            pricePerHour: service.pricePerHour ? service.pricePerHour.toNumber() : null,
+            currency: service.currency,
             createdAt: service.createdAt,
             branch: { id: service.branch.id, name: service.branch.name, vendor: service.branch.vendor.companyName },
-            pricing: service.pricing.map(p => ({ id: p.id, interval: p.interval, pricingMode: p.pricingMode, isPublic: p.isPublic, price: p.price.toNumber(), currency: p.currency })),
             setupConfigs: service.setupConfigs.map(c => ({ setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
         };
     }
@@ -1079,10 +1141,6 @@ export class AdminService {
     async createAdminService(dto: CreateServiceDto) {
         const branch = await this.prisma.branch.findUnique({ where: { id: dto.branchId } });
         if (!branch) throw new NotFoundException('Branch not found');
-
-        if (!dto.pricing || dto.pricing.length === 0) {
-            throw new BadRequestException('At least one pricing interval must be provided');
-        }
 
         const capacity = dto.setupConfigs && dto.setupConfigs.length > 0
             ? Math.max(...dto.setupConfigs.map(c => c.maxPeople))
@@ -1104,14 +1162,14 @@ export class AdminService {
                 shape: dto.shape,
                 features: dto.features,
                 isPublic: dto.isPublic ?? true,
-                pricing: {
-                    create: dto.pricing.map(p => ({ interval: p.interval, pricingMode: p.pricingMode ?? 'PER_BOOKING', price: p.price, isPublic: p.isPublic ?? true })),
-                },
+                pricePerBooking: dto.pricePerBooking ?? null,
+                pricePerPerson: dto.pricePerPerson ?? null,
+                pricePerHour: dto.pricePerHour ?? null,
                 setupConfigs: dto.setupConfigs && dto.setupConfigs.length > 0 ? {
                     create: dto.setupConfigs.map(c => ({ setupType: c.setupType, minPeople: c.minPeople, maxPeople: c.maxPeople })),
                 } : undefined,
             },
-            include: { pricing: true, setupConfigs: true },
+            include: { setupConfigs: true },
         });
 
         return this.getAdminServiceById(service.id);
@@ -1136,15 +1194,9 @@ export class AdminService {
         if (dto.unitNumber !== undefined) updateData.unitNumber = dto.unitNumber;
         if (dto.features !== undefined) updateData.features = dto.features;
         if (dto.isPublic !== undefined) updateData.isPublic = dto.isPublic;
-
-        if (dto.pricing && dto.pricing.length > 0) {
-            await this.prisma.$transaction([
-                this.prisma.servicePricing.deleteMany({ where: { serviceId: id } }),
-                this.prisma.servicePricing.createMany({
-                    data: dto.pricing.map((p: any) => ({ serviceId: id, interval: p.interval, pricingMode: p.pricingMode ?? 'PER_BOOKING', price: p.price, isPublic: p.isPublic ?? true })),
-                }),
-            ]);
-        }
+        if (dto.pricePerBooking !== undefined) updateData.pricePerBooking = dto.pricePerBooking;
+        if (dto.pricePerPerson !== undefined) updateData.pricePerPerson = dto.pricePerPerson;
+        if (dto.pricePerHour !== undefined) updateData.pricePerHour = dto.pricePerHour;
 
         if (dto.setupConfigs) {
             if (dto.setupConfigs.length > 0) {

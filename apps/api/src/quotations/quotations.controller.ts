@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -66,6 +67,12 @@ export class QuotationsController {
     @Body() dto: UpdateQuotationDto,
   ) {
     return this.quotationsService.updateQuotation(req.user.id, id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a quotation' })
+  async deleteQuotation(@Req() req: any, @Param('id') id: string) {
+    return this.quotationsService.deleteQuotation(req.user.id, id);
   }
 
   @Get(':id/pdf')

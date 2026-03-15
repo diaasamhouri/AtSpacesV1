@@ -19,7 +19,7 @@ const VENDOR_LINKS: VendorLink[] = [
     { href: "/vendor", label: "Dashboard", icon: "Dashboard" },
     { href: "/vendor/profile", label: "Profile", icon: "Building" },
     { href: "/vendor/branches", label: "Branches", icon: "MapPin" },
-    { href: "/vendor/search-booking", label: "Search Booking", icon: "Search" },
+    { href: "/vendor/search-booking", label: "New Reservation", icon: "Search" },
     { href: "/vendor/day-view", label: "Day View", icon: "CalendarClock" },
     { href: "/vendor/calendar", label: "Calendar", icon: "CalendarClock" },
     { href: "/vendor/quotations", label: "Quotations", icon: "FileText" },

@@ -1,11 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "../../../lib/auth-context";
 import { getVendorCalendar, getVendorBranches } from "../../../lib/vendor";
 import { formatServiceType } from "../../../lib/format";
 import StatusBadge from "../../components/ui/status-badge";
-import { VendorCalendar, CalendarEvent } from "../../components/vendor-calendar";
+import type { CalendarEvent } from "../../components/vendor-calendar";
+
+const VendorCalendar = dynamic(
+    () => import("../../components/vendor-calendar").then((mod) => mod.VendorCalendar),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="flex items-center justify-center py-20">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+            </div>
+        ),
+    },
+);
 
 export default function VendorCalendarPage() {
     const { token } = useAuth();

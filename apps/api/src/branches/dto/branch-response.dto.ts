@@ -1,19 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class PricingResponseDto {
-  @ApiProperty() id: string;
-  @ApiProperty() interval: string;
-  @ApiProperty({ type: Number, description: 'Price in JOD' }) price: number;
-  @ApiProperty() currency: string;
-}
-
 export class ServiceResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() type: string;
   @ApiProperty() name: string;
   @ApiPropertyOptional() description: string | null;
   @ApiProperty() capacity: number;
-  @ApiProperty({ type: [PricingResponseDto] }) pricing: PricingResponseDto[];
+  @ApiProperty({ type: Number, description: 'Price in JOD' }) price: number;
+  @ApiPropertyOptional() pricingMode: string;
+  @ApiProperty() currency: string;
 }
 
 export class VendorSummaryDto {
@@ -40,6 +35,8 @@ export class BranchListItemDto {
     description: 'Lowest price in JOD across all active services',
   })
   startingPrice: number | null;
+  @ApiPropertyOptional({ description: 'Pricing mode of the cheapest option' })
+  startingPricingMode: string | null;
 }
 
 export class PaginationMetaDto {

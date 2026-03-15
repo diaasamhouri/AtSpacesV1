@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../lib/auth-context";
-import { getQuotations, sendQuotation } from "../../../lib/quotations";
+import { useToast } from "../../components/ui/toast-provider";
+import { getQuotations, sendQuotation, deleteQuotation } from "../../../lib/quotations";
 import DataTable from "../../components/ui/data-table";
 import type { Column, ActionItem } from "../../components/ui/data-table";
 import type { Quotation } from "../../../lib/types";
@@ -18,6 +19,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function QuotationsPage() {
   const { token } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +51,19 @@ export default function QuotationsPage() {
       fetchData();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to send");
+    }
+  };
+
+  const handleDelete = async (q: Quotation) => {
+    if (!token) return;
+    const confirmed = window.confirm(`Are you sure you want to delete quotation ${q.referenceNumber}? This action cannot be undone.`);
+    if (!confirmed) return;
+    try {
+      await deleteQuotation(token, q.id);
+      toast("Quotation deleted.", "success");
+      fetchData();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to delete quotation.", "error");
     }
   };
 
@@ -123,6 +138,11 @@ export default function QuotationsPage() {
       onClick: (row) => router.push(`/vendor/quotations/${row.id}`),
       hidden: (row) => row.status === "ACCEPTED" || row.status === "REJECTED",
     },
+    {
+      label: "Delete",
+      onClick: handleDelete,
+      hidden: (row) => row.status !== "NOT_SENT" && row.status !== "REJECTED",
+    },
   ];
 
   if (loading) {
@@ -141,7 +161,7 @@ export default function QuotationsPage() {
           <p className="text-sm text-slate-500 mt-1">{quotations.length} quotation(s)</p>
         </div>
         <button
-          onClick={() => router.push("/vendor/quotations/new")}
+          onClick={() => router.push("/vendor/bookings/create?mode=quote")}
           className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
         >
           + New Quotation

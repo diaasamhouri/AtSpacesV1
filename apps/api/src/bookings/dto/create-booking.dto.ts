@@ -11,14 +11,6 @@ import {
 import { Transform } from 'class-transformer';
 import { SetupType } from '@prisma/client';
 
-export enum PricingIntervalParam {
-  HOURLY = 'HOURLY',
-  HALF_DAY = 'HALF_DAY',
-  DAILY = 'DAILY',
-  WEEKLY = 'WEEKLY',
-  MONTHLY = 'MONTHLY',
-}
-
 export enum PaymentMethodParam {
   VISA = 'VISA',
   MASTERCARD = 'MASTERCARD',
@@ -64,13 +56,6 @@ export class CreateBookingDto {
   @IsInt()
   @Min(1)
   numberOfPeople: number;
-
-  @ApiProperty({
-    description: 'Pricing interval to apply',
-    enum: PricingIntervalParam,
-  })
-  @IsEnum(PricingIntervalParam)
-  pricingInterval: PricingIntervalParam;
 
   @ApiProperty({
     description: 'Payment method',

@@ -1,22 +1,7 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, IsNumber, IsArray, ValidateNested, IsBoolean, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ServiceType, PricingInterval, PricingMode, RoomShape, SetupType } from '@prisma/client';
-
-export class ServicePricingDto {
-    @ApiProperty({ enum: PricingInterval })
-    @IsEnum(PricingInterval)
-    interval: PricingInterval;
-
-    @ApiProperty({ enum: PricingMode, required: false })
-    @IsOptional()
-    @IsEnum(PricingMode)
-    pricingMode?: PricingMode;
-
-    @ApiProperty({ example: 15.0 })
-    @IsNumber()
-    price: number;
-}
+import { ServiceType, RoomShape, SetupType } from '@prisma/client';
 
 export class SetupConfigDto {
     @ApiProperty({ enum: SetupType })
@@ -59,10 +44,16 @@ export class CreateServiceDto {
     @IsOptional()
     description?: string;
 
-    @ApiProperty({ example: 20, required: false, description: 'Legacy capacity field; prefer setupConfigs' })
-    @IsNumber()
+    @ApiProperty({ example: 20, required: false, description: 'Max capacity for HOT_DESK/PRIVATE_OFFICE' })
+    @IsInt()
     @IsOptional()
     capacity?: number;
+
+    @ApiProperty({ example: 1, required: false, description: 'Min capacity for HOT_DESK/PRIVATE_OFFICE' })
+    @IsInt()
+    @Min(1)
+    @IsOptional()
+    minCapacity?: number;
 
     @ApiProperty({ example: 'Ground Floor', required: false })
     @IsString()
@@ -100,11 +91,28 @@ export class CreateServiceDto {
     @IsOptional()
     features?: string[];
 
-    @ApiProperty({ type: [ServicePricingDto] })
-    @IsArray()
-    @ValidateNested({ each: true })
-    @Type(() => ServicePricingDto)
-    pricing: ServicePricingDto[];
+    @ApiProperty({ required: false, default: true })
+    @IsBoolean()
+    @IsOptional()
+    isPublic?: boolean;
+
+    @ApiProperty({ example: 15.0, required: false, description: 'Price per booking (flat rate)' })
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    pricePerBooking?: number;
+
+    @ApiProperty({ example: 10.0, required: false, description: 'Price per person' })
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    pricePerPerson?: number;
+
+    @ApiProperty({ example: 5.0, required: false, description: 'Price per hour' })
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    pricePerHour?: number;
 
     @ApiProperty({ type: [SetupConfigDto], required: false, description: 'Setup configurations with min/max people per setup type' })
     @IsArray()
@@ -119,4 +127,9 @@ export class UpdateServiceDto extends PartialType(CreateServiceDto) {
     @IsBoolean()
     @IsOptional()
     isActive?: boolean;
+
+    @ApiProperty({ required: false })
+    @IsBoolean()
+    @IsOptional()
+    isPublic?: boolean;
 }

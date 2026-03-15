@@ -3,11 +3,15 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RequireSection, AdminSection } from '../auth/decorators/roles.decorator';
-import { Role, BookingStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { AdminService } from './admin.service';
 import { CreateServiceDto, UpdateServiceDto } from '../services/dto';
 import {
     UpdateVendorStatusDto,
+    UpdateBookingStatusDto,
+    UpdateBranchStatusDto,
+    ProcessApprovalDto,
+    UpdateVendorCommissionDto,
     CreateTeamUserDto,
     AdminVendorsQueryDto,
     AdminUsersQueryDto,
@@ -168,9 +172,9 @@ export class AdminController {
     @ApiOperation({ summary: 'Update booking status (cancel, no-show)' })
     async updateBookingStatus(
         @Param('id') id: string,
-        @Body('status') status: BookingStatus,
+        @Body() dto: UpdateBookingStatusDto,
     ) {
-        return this.adminService.updateBookingStatus(id, status);
+        return this.adminService.updateBookingStatus(id, dto.status as any);
     }
 
     // ==================== PAYMENTS ====================
@@ -217,9 +221,9 @@ export class AdminController {
     @ApiOperation({ summary: 'Update branch status' })
     async updateBranchStatus(
         @Param('id') id: string,
-        @Body('status') status: 'ACTIVE' | 'SUSPENDED' | 'UNDER_REVIEW',
+        @Body() dto: UpdateBranchStatusDto,
     ) {
-        return this.adminService.updateBranchStatus(id, status);
+        return this.adminService.updateBranchStatus(id, dto.status as any);
     }
 
     // ==================== APPROVALS ====================
@@ -236,11 +240,10 @@ export class AdminController {
     @ApiOperation({ summary: 'Process an approval request' })
     async processApproval(
         @Param('id') id: string,
-        @Body('status') status: 'APPROVED' | 'REJECTED',
-        @Body('reason') reason?: string,
+        @Body() dto: ProcessApprovalDto,
         @Req() req?: any,
     ) {
-        return this.adminService.processApproval(id, status, reason, req?.user?.id);
+        return this.adminService.processApproval(id, dto.status as any, dto.reason, req?.user?.id);
     }
 
     // ==================== NOTIFICATIONS ====================
@@ -308,9 +311,9 @@ export class AdminController {
     async updateVendorCommission(
         @Req() req: any,
         @Param('id') vendorId: string,
-        @Body('commissionRate') commissionRate: number | null,
+        @Body() dto: UpdateVendorCommissionDto,
     ) {
-        return this.adminService.updateVendorCommission(req.user.id, vendorId, commissionRate);
+        return this.adminService.updateVendorCommission(req.user.id, vendorId, dto.commissionRate);
     }
 
     // ==================== EXPORTS ====================

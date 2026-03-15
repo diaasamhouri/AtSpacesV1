@@ -15,7 +15,7 @@ AtSpaces is a coworking space booking and vendor management platform for Jordan.
 - `npm run check-types` — type-check all apps and packages
 - `npm run format` — format with Prettier
 
-### Backend (`apps/api`)
+### Backend (`apps/api`) — run from `apps/api/`
 - `npm test` — run unit tests (Jest, matches `*.spec.ts`)
 - `npm test -- --testPathPattern=bookings` — run a single test file by name
 - `npm run test:watch` — run tests in watch mode
@@ -24,14 +24,22 @@ AtSpaces is a coworking space booking and vendor management platform for Jordan.
 - `npm run start:dev` — start backend only in watch mode
 - `npx prisma migrate dev` — run Prisma migrations
 - `npx prisma db seed` — seed the database (uses `ts-node prisma/seed.ts`)
-- `npx prisma generate` — regenerate Prisma client after schema changes
+- `npx prisma generate` — regenerate Prisma client after schema changes (required after fresh clone or schema changes before build)
 
-### Frontend (`apps/web`)
+### Frontend (`apps/web`) — run from `apps/web/`
 - `npm run dev` — start frontend only on :3000
 - `npm run check-types` — runs `next typegen` then `tsc --noEmit`
 
 ### Infrastructure
-- `docker compose up -d` — start PostgreSQL (5432) and Redis (6379)
+- `docker compose up -d` — start PostgreSQL (5432) and Redis (6379). Default credentials: `postgres`/`password`, database `atspaces`.
+- Copy `apps/api/.env.example` to `apps/api/.env` for local development.
+
+### First-time setup
+1. `npm install` (from root)
+2. `docker compose up -d`
+3. Copy `apps/api/.env.example` → `apps/api/.env`
+4. `cd apps/api && npx prisma generate && npx prisma migrate dev && npx prisma db seed`
+5. `npm run dev` (from root)
 
 ## Architecture
 
@@ -71,21 +79,25 @@ Shared services: `PrismaService` (DB), `RedisService` (distributed locking).
 
 ### Data Model (Prisma — `apps/api/prisma/schema.prisma`)
 Key relationships:
-- **User** → role (ADMIN | MODERATOR | ACCOUNTANT | VENDOR | CUSTOMER), has Account (OAuth), Session, OtpCode
-- **VendorProfile** → belongs to User (1:1), status flow: DRAFT → PENDING_APPROVAL → APPROVED | REJECTED | SUSPENDED
-- **Branch** → belongs to VendorProfile, city enum (AMMAN | IRBID | AQABA), has operatingHours (JSON), amenities[], autoAcceptBookings flag
-- **Service** → belongs to Branch, type enum (HOT_DESK | PRIVATE_OFFICE | MEETING_ROOM | EVENT_SPACE)
-- **ServicePricing** → belongs to Service, interval enum (HOURLY | HALF_DAY | DAILY | WEEKLY | MONTHLY), price as Decimal in JOD
-- **Booking** → links User, Branch, Service. Status flow: PENDING → PENDING_APPROVAL → CONFIRMED → CHECKED_IN → COMPLETED (or CANCELLED | REJECTED | NO_SHOW)
-- **Payment** → belongs to Booking (1:1), method (VISA | MASTERCARD | APPLE_PAY | CASH), status (PENDING | COMPLETED | FAILED | REFUNDED)
+- **User** → role (ADMIN | MODERATOR | ACCOUNTANT | VENDOR | CUSTOMER), has Account (OAuth), Session, OtpCode. Phase 8 fields: entityType, nationality, gender, legalDocType, customerClassification.
+- **VendorProfile** → belongs to User (1:1), status flow: DRAFT → PENDING_APPROVAL → APPROVED | REJECTED | SUSPENDED. Phase 8 fields: companyLegalName, companyRegistrationNumber, companySalesTaxNumber, taxRate/taxEnabled, commissionRate. Has AuthorizedSignatory[], CompanyContact[], DepartmentContact[], BankingInfo[].
+- **Branch** → belongs to VendorProfile, city enum (AMMAN | IRBID | AQABA), has operatingHours (JSON), amenities[], autoAcceptBookings flag, status (ACTIVE | SUSPENDED | UNDER_REVIEW). Phase 9: grossArea, receptionMobile/Email.
+- **Service** → belongs to Branch, type enum (HOT_DESK | PRIVATE_OFFICE | MEETING_ROOM | EVENT_SPACE). Phase 9: shape (RoomShape), floor, netSize, features[]. Has ServiceSetupConfig[] (setupType + min/maxPeople).
+- **ServicePricing** → belongs to Service, interval enum (HOURLY | HALF_DAY | DAILY | WEEKLY | MONTHLY), pricingMode (PER_BOOKING | PER_PERSON | PER_HOUR), price as Decimal(10,3) in JOD (3 decimal places for fils).
+- **Booking** → links User, Branch, Service. Status flow: PENDING → PENDING_APPROVAL → CONFIRMED → CHECKED_IN → COMPLETED (or CANCELLED | REJECTED | NO_SHOW | EXPIRED). Financial fields: subtotal, discountType/Value/Amount, taxRate/Amount, promoCodeId. Workflow flags: salesApproved, accountantApproved, archivedAt. Has BookingAddOn[].
+- **Payment** → belongs to Booking (1:1), method (VISA | MASTERCARD | APPLE_PAY | CASH), status (PENDING | COMPLETED | FAILED | REFUNDED). Has PaymentLog[] for audit trail.
+- **VendorAddOn** → belongs to VendorProfile, unitPrice in JOD. Links to BookingAddOn for per-booking usage.
+- **Quotation** → referenceNumber, links Customer + Branch + Service, status (NOT_SENT | SENT | ACCEPTED | REJECTED), has QuotationLineItem[], financial fields (subtotal, discount, tax).
+- **Invoice** → invoiceNumber, links Booking + Customer, status (DRAFT | ISSUED | PAID | OVERDUE | CANCELLED).
 - **Review** → User + Branch (unique pair), 1-5 rating, optional vendorReply
 - **Favorite** → User + Branch (unique pair)
 - **PromoCode** → belongs to VendorProfile, optional branch scope, discountPercent, maxUses/currentUses, validUntil
+- **EntityRole** / **UserEntityRole** → Entity-level roles (OPERATOR, LESSOR, OWNER, EMPLOYEE, etc.) assigned to users.
 - **ApprovalRequest**, **Notification**, **SystemSettings**, **AdminAuditLog** for platform operations
 
 ### Frontend Architecture (`apps/web/`)
 - **Auth**: React Context (`lib/auth-context.tsx`). Token stored in `localStorage.accessToken`. Auto-fetches `/auth/me` on mount, auto-logout on 401.
-- **API layer**: `lib/api.ts` exports `apiFetch<T>()` generic wrapper. Domain helpers in `lib/bookings.ts`, `lib/vendor.ts`, `lib/admin.ts`, `lib/reviews.ts`. Base URL from `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
+- **API layer**: `lib/api.ts` exports `apiFetch<T>()` generic wrapper. Domain helpers in `lib/bookings.ts`, `lib/vendor.ts`, `lib/admin.ts`, `lib/reviews.ts`, `lib/branches.ts`, `lib/notifications.ts`, `lib/invoices.ts`, `lib/quotations.ts`. Shared types in `lib/types.ts`, formatting utilities in `lib/format.ts`. Base URL from `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
 - **Rendering**: Public pages (spaces list) use server-side rendering. Authenticated pages (vendor, admin, bookings) are client-rendered.
 - **Pagination pattern**: API returns `{ data: [], meta: { page, limit, total, totalPages } }`.
 
@@ -93,17 +105,20 @@ Key page routes:
 - `/` — Landing with hero, services, cities
 - `/spaces` — Browse/filter branches (SSR)
 - `/spaces/[id]` — Branch detail with services, reviews, map (Leaflet), booking modal
-- `/auth/login`, `/auth/signup`, `/auth/callback` — Authentication
+- `/auth/login`, `/auth/signup`, `/auth/callback`, `/auth/forgot-password`, `/auth/reset-password` — Authentication
 - `/become-vendor` — Multi-step vendor registration form
-- `/vendor/*` — Vendor dashboard (stats, branches, services, bookings, earnings, promos)
-- `/admin/*` — Admin dashboard (vendors, users, bookings, payments, analytics, settings)
+- `/vendor/*` — Vendor dashboard (stats, branches, services, bookings by status, earnings, promos, reviews, calendar, day-view, quotations, add-ons, search-booking, profile, analytics, notifications)
+- `/admin/*` — Admin dashboard (vendors, users, bookings by status, payments, branches, services, invoices, approvals, analytics, settings, notifications). Separate `/admin/login`.
 - `/bookings`, `/bookings/[id]` — Customer bookings
 - `/profile` — User profile management
 - `/favorites` — Favorited branches
+- `/contact`, `/about`, `/how-it-works`, `/privacy`, `/terms`, `/ai-assistant`, `/notifications` — Static/utility pages
 
 ### Key Technical Details
 - **Double-booking prevention**: `RedisService` acquires a distributed lock before creating bookings, uses Prisma `$transaction()` for atomicity.
 - **Global validation pipe**: Whitelist mode with `forbidNonWhitelisted` and `transform` enabled — unknown DTO fields are stripped and rejected.
+- **Currency**: All monetary values in JOD (Jordanian Dinar) with `Decimal(10,3)` — 3 decimal places for fils.
+- **PDF generation**: Backend uses `pdfkit` for quotation/invoice PDFs. Frontend uses `jspdf` + `jspdf-autotable`.
 - **CORS**: Configured via `FRONTEND_URL` env var (defaults to `http://localhost:3000`).
 - Backend Jest config is in `apps/api/package.json` (rootDir: `src`, transform: `ts-jest`).
 - Web `check-types` runs `next typegen` before `tsc --noEmit`.
@@ -123,3 +138,7 @@ Key page routes:
 
 **Frontend** (`apps/web`):
 - `NEXT_PUBLIC_API_URL` — Backend URL (default: `http://localhost:3001`)
+
+### CI / GitHub Actions
+- Claude Code Action (`.github/workflows/claude.yml`) — responds to `@claude` mentions in issues, PRs, and review comments.
+- Additional workflows for PR review, issue triage, issue deduplication, and CI failure auto-fix.

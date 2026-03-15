@@ -64,11 +64,12 @@ export default function ProfilePage() {
       formData.append("file", file);
       const uploadRes = await fetch(`${API_BASE_URL_UPLOAD}/uploads`, {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
       if (!uploadRes.ok) throw new Error("Upload failed");
       const uploadData = await uploadRes.json();
-      const imageUrl = `${API_BASE_URL_UPLOAD}${uploadData.url}`;
+      const imageUrl = uploadData.url;
 
       const res = await fetch(`${API_BASE_URL}/auth/me`, {
         method: "PATCH",

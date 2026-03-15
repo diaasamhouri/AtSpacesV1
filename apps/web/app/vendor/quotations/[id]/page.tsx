@@ -33,8 +33,11 @@ export default function QuotationDetailPage() {
     const [editAmount, setEditAmount] = useState("");
     const [editNotes, setEditNotes] = useState("");
     const [editPeople, setEditPeople] = useState(1);
-    const [editPricingInterval, setEditPricingInterval] = useState("");
     const [editPricingMode, setEditPricingMode] = useState("");
+    const [editDiscountType, setEditDiscountType] = useState("NONE");
+    const [editDiscountValue, setEditDiscountValue] = useState(0);
+    const [editTaxRate, setEditTaxRate] = useState(0);
+    const [editSubtotal, setEditSubtotal] = useState(0);
     const [saving, setSaving] = useState(false);
 
     // Confirm dialogs
@@ -69,14 +72,32 @@ export default function QuotationDetailPage() {
         setEditAmount(String(quotation.totalAmount));
         setEditNotes(quotation.notes || "");
         setEditPeople(quotation.numberOfPeople);
-        setEditPricingInterval(quotation.pricingInterval || "");
         setEditPricingMode(quotation.pricingMode || "");
+        setEditDiscountType(quotation.discountType || "NONE");
+        setEditDiscountValue(Number(quotation.discountValue) || 0);
+        setEditTaxRate(Number(quotation.taxRate) || 0);
+        setEditSubtotal(Number(quotation.subtotal) || Number(quotation.totalAmount) || 0);
         setEditing(true);
     };
 
     const cancelEdit = () => {
         setEditing(false);
     };
+
+    // Computed financials for edit mode
+    const editFinancial = (() => {
+        const subtotal = editSubtotal;
+        let discount = 0;
+        if (editDiscountType === "PERCENTAGE" && editDiscountValue > 0) {
+            discount = subtotal * (editDiscountValue / 100);
+        } else if (editDiscountType === "FIXED" && editDiscountValue > 0) {
+            discount = Math.min(editDiscountValue, subtotal);
+        }
+        const afterDiscount = Math.max(0, subtotal - discount);
+        const tax = editTaxRate > 0 ? afterDiscount * (editTaxRate / 100) : 0;
+        const total = afterDiscount + tax;
+        return { subtotal, discount, tax, total };
+    })();
 
     const handleSaveEdit = async () => {
         if (!token || !quotation) return;
@@ -85,11 +106,16 @@ export default function QuotationDetailPage() {
             const updated = await updateQuotation(token, id, {
                 startTime: new Date(editStartTime).toISOString(),
                 endTime: new Date(editEndTime).toISOString(),
-                totalAmount: Number(editAmount),
+                totalAmount: editFinancial.total,
+                subtotal: editFinancial.subtotal,
                 numberOfPeople: editPeople,
-                pricingInterval: editPricingInterval || undefined,
                 pricingMode: editPricingMode || undefined,
                 notes: editNotes || undefined,
+                discountType: editDiscountType !== "NONE" ? editDiscountType : undefined,
+                discountValue: editDiscountType !== "NONE" ? editDiscountValue : undefined,
+                discountAmount: editFinancial.discount > 0 ? editFinancial.discount : undefined,
+                taxRate: editTaxRate > 0 ? editTaxRate : undefined,
+                taxAmount: editFinancial.tax > 0 ? editFinancial.tax : undefined,
             });
             setQuotation(updated);
             setEditing(false);
@@ -405,23 +431,6 @@ export default function QuotationDetailPage() {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
-                                    Pricing Interval
-                                </label>
-                                <select
-                                    value={editPricingInterval}
-                                    onChange={(e) => setEditPricingInterval(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
-                                >
-                                    <option value="">Not set</option>
-                                    <option value="HOURLY">Hourly</option>
-                                    <option value="HALF_DAY">Half Day</option>
-                                    <option value="DAILY">Daily</option>
-                                    <option value="WEEKLY">Weekly</option>
-                                    <option value="MONTHLY">Monthly</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
                                     Pricing Mode
                                 </label>
                                 <select
@@ -437,16 +446,67 @@ export default function QuotationDetailPage() {
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
-                                    Total Amount (JOD)
+                                    Subtotal (JOD)
                                 </label>
                                 <input
                                     type="number"
-                                    step="0.01"
+                                    step="0.001"
                                     min="0"
-                                    value={editAmount}
-                                    onChange={(e) => setEditAmount(e.target.value)}
+                                    value={editSubtotal || ""}
+                                    onChange={(e) => setEditSubtotal(Number(e.target.value) || 0)}
                                     className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                                    Discount Type
+                                </label>
+                                <select
+                                    value={editDiscountType}
+                                    onChange={(e) => { setEditDiscountType(e.target.value); setEditDiscountValue(0); }}
+                                    className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                                >
+                                    <option value="NONE">None</option>
+                                    <option value="PERCENTAGE">Percentage</option>
+                                    <option value="FIXED">Fixed Amount</option>
+                                </select>
+                            </div>
+                            {editDiscountType === "PERCENTAGE" && (
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Discount (%)</label>
+                                    <input type="number" min="0" max="100" step="0.1" value={editDiscountValue || ""} onChange={(e) => setEditDiscountValue(Number(e.target.value) || 0)}
+                                        className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors" />
+                                </div>
+                            )}
+                            {editDiscountType === "FIXED" && (
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Discount Amount (JOD)</label>
+                                    <input type="number" min="0" step="0.001" value={editDiscountValue || ""} onChange={(e) => setEditDiscountValue(Number(e.target.value) || 0)}
+                                        className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors" />
+                                </div>
+                            )}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Tax Rate (%)</label>
+                                <input type="number" min="0" max="100" step="0.1" value={editTaxRate || ""} onChange={(e) => setEditTaxRate(Number(e.target.value) || 0)}
+                                    className="w-full px-4 py-2.5 bg-white dark:bg-dark-850 border border-slate-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors" />
+                            </div>
+                            <div className="border-t border-slate-200 dark:border-slate-700 pt-3 space-y-1">
+                                {editFinancial.discount > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-red-400">Discount</span>
+                                        <span className="font-medium text-red-400">-{editFinancial.discount.toFixed(3)} JOD</span>
+                                    </div>
+                                )}
+                                {editFinancial.tax > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-500">Tax ({editTaxRate}%)</span>
+                                        <span className="font-medium text-gray-900 dark:text-white">{editFinancial.tax.toFixed(3)} JOD</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between text-base font-bold">
+                                    <span className="text-gray-900 dark:text-white">Total</span>
+                                    <span className="text-brand-400">{editFinancial.total.toFixed(3)} JOD</span>
+                                </div>
                             </div>
                         </div>
                     ) : (
@@ -457,11 +517,11 @@ export default function QuotationDetailPage() {
                                     {quotation.totalAmount} JOD
                                 </p>
                             </div>
-                            {quotation.pricingInterval && (
+                            {quotation.pricingMode && (
                                 <div>
-                                    <p className="text-xs text-slate-500">Pricing</p>
+                                    <p className="text-xs text-slate-500">Pricing Mode</p>
                                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                        {quotation.pricingInterval.replace("_", " ").toLowerCase()}{quotation.pricingMode ? ` (${quotation.pricingMode.replace(/_/g, " ").toLowerCase()})` : ""}
+                                        {quotation.pricingMode.replace(/_/g, " ").toLowerCase()}
                                     </p>
                                 </div>
                             )}

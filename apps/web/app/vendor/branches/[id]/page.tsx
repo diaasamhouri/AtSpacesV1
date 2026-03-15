@@ -5,10 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../lib/auth-context";
 import { useToast } from "../../../components/ui/toast-provider";
 import { getVendorBranchById, createService, deleteService, updateService, updateBranch } from "../../../../lib/vendor";
-import { formatServiceType, formatPricingInterval } from "../../../../lib/format";
+import { formatServiceType, formatRoomShape, formatSetupType } from "../../../../lib/format";
 import StatusBadge from "../../../components/ui/status-badge";
 import dynamic from "next/dynamic";
 import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
+import { SERVICE_TYPE_OPTIONS, ROOM_SHAPE_OPTIONS, SETUP_TYPES, isSetupEligible, isSimpleCapacity } from "../../../../lib/types";
 import type { VendorBranchDetail } from "../../../../lib/types";
 
 const MapDisplay = dynamic(() => import("../../../components/map-display"), { ssr: false });
@@ -52,7 +53,9 @@ export default function VendorBranchDetailPage() {
     const [showAddService, setShowAddService] = useState(false);
     const [submittingService, setSubmittingService] = useState(false);
     const [newService, setNewService] = useState({
-        type: "HOT_DESK", name: "", unitNumber: "", priceHourly: "", priceDaily: "", priceMonthly: "",
+        type: "HOT_DESK", name: "", unitNumber: "",
+        pricePerBooking: "", pricePerPerson: "", pricePerHour: "",
+        minCapacity: "", maxCapacity: "",
         floor: "", profileNameEn: "", profileNameAr: "", weight: "", netSize: "",
         shape: "", description: "", features: [] as string[],
         setupConfigs: [] as { setupType: string; minPeople: number; maxPeople: number }[],
@@ -62,7 +65,9 @@ export default function VendorBranchDetailPage() {
     // Edit service state
     const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
     const [editService, setEditService] = useState({
-        name: "", unitNumber: "", priceHourly: "", priceDaily: "", priceMonthly: "",
+        name: "", unitNumber: "",
+        pricePerBooking: "", pricePerPerson: "", pricePerHour: "",
+        minCapacity: "", maxCapacity: "",
         floor: "", profileNameEn: "", profileNameAr: "", weight: "", netSize: "",
         shape: "", description: "", features: [] as string[],
         setupConfigs: [] as { setupType: string; minPeople: number; maxPeople: number }[],
@@ -153,15 +158,16 @@ export default function VendorBranchDetailPage() {
         if (!token) return;
         setSubmittingService(true);
         try {
-            const pricing = [];
-            if (newService.priceHourly) pricing.push({ interval: "HOURLY", price: Number(newService.priceHourly) });
-            if (newService.priceDaily) pricing.push({ interval: "DAILY", price: Number(newService.priceDaily) });
-            if (newService.priceMonthly) pricing.push({ interval: "MONTHLY", price: Number(newService.priceMonthly) });
-            if (pricing.length === 0) throw new Error("Add at least one price interval.");
+            if (!newService.pricePerBooking && !newService.pricePerPerson && !newService.pricePerHour) throw new Error("At least one price is required.");
             const payload: any = {
-                branchId: id, type: newService.type, name: newService.name, pricing,
+                branchId: id, type: newService.type, name: newService.name,
             };
+            if (newService.pricePerBooking) payload.pricePerBooking = Number(newService.pricePerBooking);
+            if (newService.pricePerPerson) payload.pricePerPerson = Number(newService.pricePerPerson);
+            if (newService.pricePerHour) payload.pricePerHour = Number(newService.pricePerHour);
             if (newService.unitNumber) payload.unitNumber = newService.unitNumber;
+            if (newService.minCapacity) payload.minCapacity = Number(newService.minCapacity);
+            if (newService.maxCapacity) payload.capacity = Number(newService.maxCapacity);
             if (newService.setupConfigs.length > 0) payload.setupConfigs = newService.setupConfigs;
             if (newService.floor) payload.floor = newService.floor;
             if (newService.profileNameEn) payload.profileNameEn = newService.profileNameEn;
@@ -174,7 +180,9 @@ export default function VendorBranchDetailPage() {
             await createService(token, payload);
             setShowAddService(false);
             setNewService({
-                type: "HOT_DESK", name: "", unitNumber: "", priceHourly: "", priceDaily: "", priceMonthly: "",
+                type: "HOT_DESK", name: "", unitNumber: "",
+                pricePerBooking: "", pricePerPerson: "", pricePerHour: "",
+                minCapacity: "", maxCapacity: "",
                 floor: "", profileNameEn: "", profileNameAr: "", weight: "", netSize: "",
                 shape: "", description: "", features: [], setupConfigs: [],
             });
@@ -201,9 +209,11 @@ export default function VendorBranchDetailPage() {
         setEditingServiceId(svc.id);
         setEditService({
             name: svc.name || "", unitNumber: svc.unitNumber || "",
-            priceHourly: svc.pricing?.find((p: any) => p.interval === "HOURLY")?.price?.toString() || "",
-            priceDaily: svc.pricing?.find((p: any) => p.interval === "DAILY")?.price?.toString() || "",
-            priceMonthly: svc.pricing?.find((p: any) => p.interval === "MONTHLY")?.price?.toString() || "",
+            pricePerBooking: svc.pricePerBooking != null ? String(Number(svc.pricePerBooking)) : "",
+            pricePerPerson: svc.pricePerPerson != null ? String(Number(svc.pricePerPerson)) : "",
+            pricePerHour: svc.pricePerHour != null ? String(Number(svc.pricePerHour)) : "",
+            minCapacity: svc.minCapacity != null ? String(svc.minCapacity) : "",
+            maxCapacity: svc.capacity != null ? String(svc.capacity) : "",
             floor: svc.floor || "", profileNameEn: svc.profileNameEn || "", profileNameAr: svc.profileNameAr || "",
             weight: svc.weight != null ? String(svc.weight) : "", netSize: svc.netSize != null ? String(svc.netSize) : "",
             shape: svc.shape || "", description: svc.description || "",
@@ -217,13 +227,14 @@ export default function VendorBranchDetailPage() {
         if (!token || !editingServiceId) return;
         setSavingEdit(true);
         try {
-            const pricing = [];
-            if (editService.priceHourly) pricing.push({ interval: "HOURLY", price: Number(editService.priceHourly) });
-            if (editService.priceDaily) pricing.push({ interval: "DAILY", price: Number(editService.priceDaily) });
-            if (editService.priceMonthly) pricing.push({ interval: "MONTHLY", price: Number(editService.priceMonthly) });
-            if (pricing.length === 0) throw new Error("At least one price required.");
-            const payload: any = { name: editService.name, pricing };
+            if (!editService.pricePerBooking && !editService.pricePerPerson && !editService.pricePerHour) throw new Error("At least one price is required.");
+            const payload: any = { name: editService.name };
+            if (editService.pricePerBooking) payload.pricePerBooking = Number(editService.pricePerBooking); else payload.pricePerBooking = null;
+            if (editService.pricePerPerson) payload.pricePerPerson = Number(editService.pricePerPerson); else payload.pricePerPerson = null;
+            if (editService.pricePerHour) payload.pricePerHour = Number(editService.pricePerHour); else payload.pricePerHour = null;
             payload.unitNumber = editService.unitNumber || undefined;
+            if (editService.minCapacity) payload.minCapacity = Number(editService.minCapacity);
+            if (editService.maxCapacity) payload.capacity = Number(editService.maxCapacity);
             payload.setupConfigs = editService.setupConfigs.length > 0 ? editService.setupConfigs : undefined;
             payload.floor = editService.floor || undefined;
             payload.profileNameEn = editService.profileNameEn || undefined;
@@ -319,9 +330,14 @@ export default function VendorBranchDetailPage() {
             {/* Header */}
             <div className="rounded-2xl bg-white dark:bg-dark-900 p-8 shadow-sm border border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{branch.name}</h1>
-                        <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">{branch.address}, {branch.city}</p>
+                    <div className="flex items-center gap-4">
+                        <button type="button" onClick={() => router.push("/vendor/branches")} className="rounded-lg p-2 text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-dark-800 transition-colors" title="Back to Branches">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
+                        </button>
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{branch.name}</h1>
+                            <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">{branch.address}, {branch.city}</p>
+                        </div>
                     </div>
                     <StatusBadge status={branch.status} size="md" />
                 </div>
@@ -591,9 +607,7 @@ export default function VendorBranchDetailPage() {
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Type *</label>
                                 <select required value={newService.type} onChange={(e) => setNewService({ ...newService, type: e.target.value })}
                                     className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
-                                    <option value="HOT_DESK">Hot Desk</option>
-                                    <option value="PRIVATE_OFFICE">Private Office</option>
-                                    <option value="MEETING_ROOM">Meeting Room</option>
+                                    {SERVICE_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                 </select>
                             </div>
                             <div>
@@ -607,21 +621,24 @@ export default function VendorBranchDetailPage() {
                                     placeholder="e.g. R-101" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
                             </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-6 pt-5 border-t border-slate-200 dark:border-slate-800">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Hourly (JOD)</label>
-                                <input type="number" step="0.01" value={newService.priceHourly} onChange={(e) => setNewService({ ...newService, priceHourly: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Daily (JOD)</label>
-                                <input type="number" step="0.01" value={newService.priceDaily} onChange={(e) => setNewService({ ...newService, priceDaily: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Monthly (JOD)</label>
-                                <input type="number" step="0.01" value={newService.priceMonthly} onChange={(e) => setNewService({ ...newService, priceMonthly: e.target.value })}
-                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                        <div className="pt-5 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">Pricing * <span className="font-normal text-slate-500">(at least one required)</span></label>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Per Booking (JOD)</label>
+                                    <input type="number" step="0.001" min="0" value={newService.pricePerBooking} onChange={(e) => setNewService({ ...newService, pricePerBooking: e.target.value })}
+                                        placeholder="0.000" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Per Person (JOD)</label>
+                                    <input type="number" step="0.001" min="0" value={newService.pricePerPerson} onChange={(e) => setNewService({ ...newService, pricePerPerson: e.target.value })}
+                                        placeholder="0.000" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Per Hour (JOD)</label>
+                                    <input type="number" step="0.001" min="0" value={newService.pricePerHour} onChange={(e) => setNewService({ ...newService, pricePerHour: e.target.value })}
+                                        placeholder="0.000" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                </div>
                             </div>
                         </div>
                         {/* Room details row */}
@@ -653,22 +670,36 @@ export default function VendorBranchDetailPage() {
                                 <input type="number" step="0.01" value={newService.netSize} onChange={(e) => setNewService({ ...newService, netSize: e.target.value })}
                                     className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                             </div>
+                            {isSetupEligible(newService.type) && (
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Shape</label>
                                 <select value={newService.shape} onChange={(e) => setNewService({ ...newService, shape: e.target.value })}
                                     className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:bg-gray-50 dark:focus:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
-                                    <option value="">None</option>
-                                    <option value="L_SHAPE">L-Shape</option>
-                                    <option value="U_SHAPE">U-Shape</option>
-                                    <option value="RECTANGLE">Rectangle</option>
-                                    <option value="SQUARE">Square</option>
-                                    <option value="OVAL">Oval</option>
-                                    <option value="CUSTOM">Custom</option>
+                                    {ROOM_SHAPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                 </select>
                             </div>
+                            )}
                         </div>
+                        {/* Capacity — simple min/max for HOT_DESK / PRIVATE_OFFICE */}
+                        {isSimpleCapacity(newService.type) && (
+                        <div className="pt-5 border-t border-slate-200 dark:border-slate-800">
+                            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-3">Capacity</label>
+                            <div className="grid grid-cols-2 gap-4 max-w-xs">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Min People</label>
+                                    <input type="number" min="1" value={newService.minCapacity} onChange={(e) => setNewService({ ...newService, minCapacity: e.target.value })}
+                                        placeholder="1" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Max People</label>
+                                    <input type="number" min="1" value={newService.maxCapacity} onChange={(e) => setNewService({ ...newService, maxCapacity: e.target.value })}
+                                        placeholder="1" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                </div>
+                            </div>
+                        </div>
+                        )}
                         {/* Setup Configurations — only for MEETING_ROOM / EVENT_SPACE */}
-                        {(newService.type === "MEETING_ROOM" || newService.type === "EVENT_SPACE") && (
+                        {isSetupEligible(newService.type) && (
                         <div className="pt-5 border-t border-slate-200 dark:border-slate-800">
                             <div className="flex items-center justify-between mb-3">
                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">Setup Configurations</label>
@@ -681,8 +712,7 @@ export default function VendorBranchDetailPage() {
                                         {idx === 0 && <label className="block text-xs font-bold text-slate-500 mb-1">Setup Type</label>}
                                         <select value={sc.setupType} onChange={(e) => { const updated = [...newService.setupConfigs]; updated[idx] = { ...sc, setupType: e.target.value }; setNewService({ ...newService, setupConfigs: updated }); }}
                                             className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-950 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
-                                            <option value="CLASSROOM">Classroom</option><option value="THEATER">Theater</option><option value="BOARDROOM">Boardroom</option>
-                                            <option value="U_SHAPE_SEATING">U-Shape Seating</option><option value="HOLLOW_SQUARE">Hollow Square</option><option value="BANQUET">Banquet</option>
+                                            {SETUP_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                         </select>
                                     </div>
                                     <div>
@@ -755,21 +785,24 @@ export default function VendorBranchDetailPage() {
                                                     placeholder="e.g. R-101" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors placeholder-slate-500" />
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-3 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Hourly (JOD)</label>
-                                                <input type="number" step="0.01" value={editService.priceHourly} onChange={(e) => setEditService({ ...editService, priceHourly: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Daily (JOD)</label>
-                                                <input type="number" step="0.01" value={editService.priceDaily} onChange={(e) => setEditService({ ...editService, priceDaily: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Monthly (JOD)</label>
-                                                <input type="number" step="0.01" value={editService.priceMonthly} onChange={(e) => setEditService({ ...editService, priceMonthly: e.target.value })}
-                                                    className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                        <div className="space-y-3">
+                                            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">Pricing <span className="font-normal text-slate-500">(at least one required)</span></label>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-500 mb-1">Per Booking (JOD)</label>
+                                                    <input type="number" step="0.001" min="0" value={editService.pricePerBooking} onChange={(e) => setEditService({ ...editService, pricePerBooking: e.target.value })}
+                                                        placeholder="0.000" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-500 mb-1">Per Person (JOD)</label>
+                                                    <input type="number" step="0.001" min="0" value={editService.pricePerPerson} onChange={(e) => setEditService({ ...editService, pricePerPerson: e.target.value })}
+                                                        placeholder="0.000" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-500 mb-1">Per Hour (JOD)</label>
+                                                    <input type="number" step="0.001" min="0" value={editService.pricePerHour} onChange={(e) => setEditService({ ...editService, pricePerHour: e.target.value })}
+                                                        placeholder="0.000" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                </div>
                                             </div>
                                         </div>
                                         {/* Extended fields */}
@@ -779,17 +812,36 @@ export default function VendorBranchDetailPage() {
                                                 <input type="text" value={editService.floor} onChange={(e) => setEditService({ ...editService, floor: e.target.value })}
                                                     className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
                                             </div>
+                                            {isSetupEligible(svc.type) && (
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Shape</label>
                                                 <select value={editService.shape} onChange={(e) => setEditService({ ...editService, shape: e.target.value })}
                                                     className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:bg-gray-50 dark:focus:bg-dark-850 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
-                                                    <option value="">None</option><option value="L_SHAPE">L-Shape</option><option value="U_SHAPE">U-Shape</option>
-                                                    <option value="RECTANGLE">Rectangle</option><option value="SQUARE">Square</option><option value="OVAL">Oval</option><option value="CUSTOM">Custom</option>
+                                                    {ROOM_SHAPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                                 </select>
                                             </div>
+                                            )}
                                         </div>
+                                        {/* Capacity — simple min/max for HOT_DESK / PRIVATE_OFFICE */}
+                                        {isSimpleCapacity(svc.type) && (
+                                        <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
+                                            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-3">Capacity</label>
+                                            <div className="grid grid-cols-2 gap-4 max-w-xs">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-500 mb-1">Min People</label>
+                                                    <input type="number" min="1" value={editService.minCapacity} onChange={(e) => setEditService({ ...editService, minCapacity: e.target.value })}
+                                                        placeholder="1" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-500 mb-1">Max People</label>
+                                                    <input type="number" min="1" value={editService.maxCapacity} onChange={(e) => setEditService({ ...editService, maxCapacity: e.target.value })}
+                                                        placeholder="1" className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        )}
                                         {/* Setup Configurations — only for MEETING_ROOM / EVENT_SPACE */}
-                                        {(svc.type === "MEETING_ROOM" || svc.type === "EVENT_SPACE") && (
+                                        {isSetupEligible(svc.type) && (
                                         <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
                                             <div className="flex items-center justify-between mb-3">
                                                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">Setup Configurations</label>
@@ -802,8 +854,7 @@ export default function VendorBranchDetailPage() {
                                                         {idx === 0 && <label className="block text-xs font-bold text-slate-500 mb-1">Setup Type</label>}
                                                         <select value={sc.setupType} onChange={(e) => { const updated = [...editService.setupConfigs]; updated[idx] = { ...sc, setupType: e.target.value }; setEditService({ ...editService, setupConfigs: updated }); }}
                                                             className="block w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-gray-900 dark:text-white bg-white dark:bg-dark-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
-                                                            <option value="CLASSROOM">Classroom</option><option value="THEATER">Theater</option><option value="BOARDROOM">Boardroom</option>
-                                                            <option value="U_SHAPE_SEATING">U-Shape Seating</option><option value="HOLLOW_SQUARE">Hollow Square</option><option value="BANQUET">Banquet</option>
+                                                            {SETUP_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                                         </select>
                                                     </div>
                                                     <div>
@@ -883,27 +934,58 @@ export default function VendorBranchDetailPage() {
                                                 <span className="rounded-md bg-brand-500/10 border border-brand-500/20 px-2 py-1 text-[10px] font-bold text-brand-400 tracking-wider">{formatServiceType(svc.type || "")}</span>
                                             </div>
                                             {/* Setup Configs display — only for eligible types */}
-                                            {(svc.type === "MEETING_ROOM" || svc.type === "EVENT_SPACE") && svc.setupConfigs && svc.setupConfigs.length > 0 ? (
+                                            {isSetupEligible(svc.type) && svc.setupConfigs && svc.setupConfigs.length > 0 ? (
                                                 <div className="flex flex-wrap gap-1.5 mb-2">
                                                     {svc.setupConfigs.map((sc: any, idx: number) => (
                                                         <span key={idx} className="inline-flex rounded-full bg-slate-100 dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                                                            {sc.setupType.replace(/_/g, " ")}: {sc.minPeople}-{sc.maxPeople}
+                                                            {formatSetupType(sc.setupType)}: {sc.minPeople}-{sc.maxPeople}
                                                         </span>
                                                     ))}
                                                 </div>
-                                            ) : svc.capacity != null ? (
+                                            ) : (svc.minCapacity != null || svc.capacity != null) ? (
                                                 <div className="flex flex-wrap gap-1.5 mb-2">
                                                     <span className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400">
-                                                        <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg> {svc.capacity}
+                                                        <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+                                                        {svc.minCapacity != null && svc.capacity != null ? `${svc.minCapacity}–${svc.capacity} people` : svc.capacity != null ? `${svc.capacity} people` : ""}
                                                     </span>
                                                 </div>
                                             ) : null}
+                                            {/* Extended info chips */}
+                                            {(svc.floor || svc.netSize != null || (svc.shape && isSetupEligible(svc.type))) && (
+                                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                                    {svc.floor && <span className="inline-flex rounded-full bg-slate-100 dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">Floor: {svc.floor}</span>}
+                                                    {svc.netSize != null && <span className="inline-flex rounded-full bg-slate-100 dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">{svc.netSize} sqm</span>}
+                                                    {svc.shape && isSetupEligible(svc.type) && <span className="inline-flex rounded-full bg-slate-100 dark:bg-dark-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">{formatRoomShape(svc.shape)}</span>}
+                                                </div>
+                                            )}
+                                            {svc.description && <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">{svc.description}</p>}
+                                            {svc.features && svc.features.length > 0 && (
+                                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                                    {svc.features.map((f: string) => <span key={f} className="inline-flex rounded-full bg-brand-500/10 border border-brand-500/20 px-2.5 py-1 text-[11px] font-bold text-brand-400">{f}</span>)}
+                                                </div>
+                                            )}
                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-gray-50 dark:bg-dark-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800/50 inline-flex">
-                                                {svc.pricing?.map((p: any) => (
-                                                    <span key={p.interval} className="flex items-baseline gap-1">
-                                                        <span className="text-xs text-slate-500 capitalize">{formatPricingInterval(p.interval)}:</span> <span className="text-gray-900 dark:text-white font-bold">JOD {Number(p.price).toFixed(2)}</span>
+                                                {svc.pricePerBooking != null && (
+                                                    <span className="flex items-baseline gap-1">
+                                                        <span className="text-gray-900 dark:text-white font-bold">{Number(svc.pricePerBooking).toFixed(3)} JOD</span>
+                                                        <span className="text-xs text-slate-500">/booking</span>
                                                     </span>
-                                                ))}
+                                                )}
+                                                {svc.pricePerPerson != null && (
+                                                    <span className="flex items-baseline gap-1">
+                                                        <span className="text-gray-900 dark:text-white font-bold">{Number(svc.pricePerPerson).toFixed(3)} JOD</span>
+                                                        <span className="text-xs text-slate-500">/person</span>
+                                                    </span>
+                                                )}
+                                                {svc.pricePerHour != null && (
+                                                    <span className="flex items-baseline gap-1">
+                                                        <span className="text-gray-900 dark:text-white font-bold">{Number(svc.pricePerHour).toFixed(3)} JOD</span>
+                                                        <span className="text-xs text-slate-500">/hr</span>
+                                                    </span>
+                                                )}
+                                                {svc.pricePerBooking == null && svc.pricePerPerson == null && svc.pricePerHour == null && (
+                                                    <span className="text-slate-500">{"\u2014"}</span>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex gap-2 shrink-0 sm:self-start">

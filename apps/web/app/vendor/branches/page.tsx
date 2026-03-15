@@ -2,25 +2,57 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getVendorBranches } from "../../../lib/vendor";
+import { getVendorBranches, deleteBranch } from "../../../lib/vendor";
 import { useAuth } from "../../../lib/auth-context";
 import { formatServiceType } from "../../../lib/format";
+import { SERVICE_TYPE_OPTIONS } from "../../../lib/types";
 import StatusBadge from "../../components/ui/status-badge";
+import { ConfirmDialog } from "../../components/ui/confirm-dialog";
+import { useToast } from "../../components/ui/toast-provider";
 
 export default function VendorBranches() {
     const { token } = useAuth();
+    const { toast } = useToast();
     const [branches, setBranches] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [unitTypeFilter, setUnitTypeFilter] = useState("");
+    const [suspendTarget, setSuspendTarget] = useState<string | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-    useEffect(() => {
+    const loadBranches = () => {
         if (!token) return;
         setLoading(true);
         getVendorBranches(token, { unitType: unitTypeFilter || undefined })
             .then((res) => { setBranches(res.data); setLoading(false); })
             .catch(() => { setError("Failed to load branches."); setLoading(false); });
-    }, [token, unitTypeFilter]);
+    };
+
+    useEffect(() => { loadBranches(); }, [token, unitTypeFilter]);
+
+    const handleSuspendConfirm = async () => {
+        if (!suspendTarget || !token) return;
+        try {
+            await deleteBranch(token, suspendTarget);
+            toast("Branch suspension requested. Pending admin approval.", "success");
+            loadBranches();
+        } catch {
+            toast("Failed to request branch suspension.", "error");
+        }
+        setSuspendTarget(null);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteTarget || !token) return;
+        try {
+            await deleteBranch(token, deleteTarget);
+            toast("Branch deleted permanently.", "success");
+            loadBranches();
+        } catch {
+            toast("Failed to delete branch.", "error");
+        }
+        setDeleteTarget(null);
+    };
 
     if (loading) {
         return (
@@ -46,10 +78,7 @@ export default function VendorBranches() {
                         className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-dark-850 px-3 py-2.5 text-sm text-gray-900 dark:text-white"
                     >
                         <option value="">All Unit Types</option>
-                        <option value="HOT_DESK">Hot Desk</option>
-                        <option value="PRIVATE_OFFICE">Private Office</option>
-                        <option value="MEETING_ROOM">Meeting Room</option>
-                        <option value="EVENT_SPACE">Event Space</option>
+                        {SERVICE_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                     <Link href="/vendor/branches/new" className="rounded-xl bg-brand-500 active:scale-95 px-6 py-3 text-sm font-bold text-white hover:bg-brand-600 hover:-translate-y-0.5 shadow-[0_4px_12px_rgba(255,91,4,0.3)] transition-all">
                         Add New Branch
@@ -103,9 +132,26 @@ export default function VendorBranches() {
                                             <StatusBadge status={branch.status} />
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Link href={`/vendor/branches/${branch.id}`} className="text-sm font-bold text-brand-500 hover:text-brand-400 transition-colors">
-                                                Manage
-                                            </Link>
+                                            <div className="flex items-center justify-end gap-3">
+                                                <Link href={`/vendor/branches/${branch.id}`} className="text-sm font-bold text-brand-500 hover:text-brand-400 transition-colors">
+                                                    Manage
+                                                </Link>
+                                                {branch.status === "SUSPENDED" ? (
+                                                    <button
+                                                        onClick={() => setDeleteTarget(branch.id)}
+                                                        className="text-sm font-bold text-red-500 hover:text-red-400 transition-colors"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => setSuspendTarget(branch.id)}
+                                                        className="text-sm font-bold text-red-500 hover:text-red-400 transition-colors"
+                                                    >
+                                                        Suspend
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -114,6 +160,26 @@ export default function VendorBranches() {
                     </table>
                 </div>
             </div>
+
+            <ConfirmDialog
+                isOpen={!!suspendTarget}
+                onClose={() => setSuspendTarget(null)}
+                onConfirm={handleSuspendConfirm}
+                title="Suspend Branch"
+                message="This will request a suspension of this branch. An admin will review the request. All active bookings under this branch will remain unaffected until approved."
+                confirmLabel="Request Suspension"
+                variant="danger"
+            />
+
+            <ConfirmDialog
+                isOpen={!!deleteTarget}
+                onClose={() => setDeleteTarget(null)}
+                onConfirm={handleDeleteConfirm}
+                title="Delete Branch Permanently"
+                message="This will permanently delete this suspended branch and all its services. This action cannot be undone."
+                confirmLabel="Delete Permanently"
+                variant="danger"
+            />
         </div>
     );
 }
